@@ -1,0 +1,50 @@
+name:                fraudstop
+version:             0.1.0
+github:              "tjmcewan/fraudstop"
+license:             BSD3
+author:              "Tim McEwan"
+maintainer:          "tim@mcewan.it"
+copyright:           "Tim McEwan"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            private
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/tjmcewan/fraudstop#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- serverless-haskell
+- aeson
+
+library:
+  source-dirs: src
+
+executables:
+  fraudstop-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - fraudstop
+
+tests:
+  fraudstop-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - fraudstop
