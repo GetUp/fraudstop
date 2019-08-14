@@ -1,10 +1,11 @@
 module Main where
 
-import Lib
 import qualified Data.Aeson as Aeson
+import Lib
 
 import AWSLambda
 
+main :: IO ()
 main = lambdaMain handler
 
 handler :: Aeson.Value -> IO [Int]

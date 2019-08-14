@@ -1,9 +1,9 @@
 name:                fraudstop
 version:             0.1.0
-github:              "tjmcewan/fraudstop"
+github:              "getup/fraudstop"
 license:             BSD3
 author:              "Tim McEwan"
-maintainer:          "tim@mcewan.it"
+maintainer:          "tim@getup.org.au"
 copyright:           "Tim McEwan"
 
 extra-source-files:
@@ -17,7 +17,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/tjmcewan/fraudstop#readme>
+description:         Please see the README on GitHub at <https://github.com/getup/fraudstop#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -26,6 +26,9 @@ dependencies:
 
 library:
   source-dirs: src
+  ghc-options:
+    - -Wall
+    - -Werror
 
 executables:
   fraudstop-exe:
@@ -35,6 +38,8 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
+    - -Werror
     dependencies:
     - fraudstop
 
@@ -46,5 +51,8 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
+    - -Werror
     dependencies:
     - fraudstop
+    - hspec

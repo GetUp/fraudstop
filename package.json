@@ -1,16 +1,11 @@
 {
   "name": "fraudstop",
-  "version": "0.1.0",
-  "description": "",
-  "main": "index.js",
-  "directories": {
-    "test": "test"
-  },
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "ghcid --command='stack ghci src/Lib.hs test/Spec.hs' --test=main",
+    "deploy": "set -u && DATABASE_URL=$FRAUDSTOP_DB_URL ./node_modules/.bin/sls deploy -f fraudstop-func",
+    "deployprod": "set -u && DATABASE_URL=$FRAUDSTOP_PROD_DB_URL ./node_modules/.bin/sls deploy -f fraudstop-func --stage prod"
   },
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "serverless": "^1.41.1",
     "serverless-haskell": "^0.8.4"
