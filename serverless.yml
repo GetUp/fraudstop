@@ -2,16 +2,16 @@ service: fraudstop
 
 provider:
   name: aws
+  iamRoleStatements:
+  - Effect: Allow
+    Action:
+      - lambda:InvokeFunction
+    Resource: "*"
 
 functions:
   fraudstop-func:
     runtime: haskell
     handler: fraudstop.fraudstop-exe
-    iamRoleStatements:
-    - Effect: Allow
-      Action:
-        - lambda:InvokeFunction
-      Resource: "*"
 
   letter-func:
     runtime: nodejs10.x
