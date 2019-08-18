@@ -17,5 +17,9 @@ functions:
     runtime: nodejs10.x
     handler: letter.handler
 
+package:
+  include:
+    - node_modules/**
+
 plugins:
   - serverless-haskell
