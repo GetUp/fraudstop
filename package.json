@@ -7,6 +7,8 @@
     "deployprod": "set -u && DATABASE_URL=$FRAUDSTOP_PROD_DB_URL ./node_modules/.bin/sls deploy -f fraudstop-func --stage prod"
   },
   "dependencies": {
+    "moment": "^2.24.0",
+    "pdfkit": "^0.10.0",
     "serverless": "^1.41.1",
     "serverless-haskell": "^0.8.4"
   }
