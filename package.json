@@ -2,7 +2,7 @@
   "name": "fraudstop",
   "private": true,
   "scripts": {
-    "start": "ghcid --command='stack ghci src/Lib.hs test/Spec.hs' --test=main",
+    "start": "ghcid --command='stack ghci src/Handler.hs test/Spec.hs' --test=main",
     "deploy": "set -u && DATABASE_URL=$FRAUDSTOP_DB_URL ./node_modules/.bin/sls deploy -f fraudstop-func",
     "deployprod": "set -u && DATABASE_URL=$FRAUDSTOP_PROD_DB_URL ./node_modules/.bin/sls deploy -f fraudstop-func --stage prod"
   },
