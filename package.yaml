@@ -28,6 +28,7 @@ dependencies:
 - bytestring
 - amazonka
 - amazonka-lambda
+- req
 
 library:
   source-dirs: src

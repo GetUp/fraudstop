@@ -40,6 +40,8 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
 - serverless-haskell-0.8.8
+- req-2.1.0
+- retry-0.8.0.1 # for req
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
