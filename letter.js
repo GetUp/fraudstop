@@ -10,7 +10,7 @@ exports.handler = async (event) => {
   const letter = encode64(filename)
   return {
     statusCode: 200,
-    body: JSON.stringify({ letter }),
+    body: JSON.stringify(letter),
   }
 }
 
