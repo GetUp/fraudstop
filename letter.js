@@ -16,7 +16,7 @@ exports.handler = async (event) => {
 
 function createLetter(details) {
   return new Promise((resolve, reject) => {
-    const filename = `tmp/${details.crn}.pdf`
+    const filename = `/tmp/${details.crn}.pdf`
     let pendingStepCount = 2
     // both steps (stream close & doc.end) need to finish w/o error
     const stepFinished = () => { if (--pendingStepCount == 0) resolve(filename) }
