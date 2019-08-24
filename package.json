@@ -9,7 +9,7 @@
   "dependencies": {
     "moment": "^2.24.0",
     "pdfkit": "^0.10.0",
-    "serverless": "^1.41.1",
+    "serverless": "^1.50.0",
     "serverless-haskell": "^0.8.4"
   }
 }
