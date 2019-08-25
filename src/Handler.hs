@@ -57,8 +57,9 @@ data Details =
     }
   deriving (Show, Generic)
 
-data CustomException =
-  BadLetter
+data CustomException
+  = BadLambdaResponse
+  | BadLetter
   deriving (Show, Typeable)
 
 instance Exception CustomException
@@ -112,8 +113,9 @@ invokeLambda region funcName payload = do
   env <- newEnv Discover <&> set envLogger lgr
   runResourceT . runAWST env . within region $ do
     rsp <- send $ invoke funcName $ toBS payload
-    let Just output = rsp ^. irsPayload
-    return output
+    case rsp ^. irsPayload of
+      Just output -> return output
+      Nothing -> throw BadLambdaResponse
 
 sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3, ToJSON v4) => v1 -> v2 -> v3 -> v4 -> m Value
 sendLetter authEmail key apiMode letter = do
