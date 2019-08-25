@@ -4,7 +4,7 @@ github:              "getup/fraudstop"
 license:             BSD3
 author:              "Tim McEwan"
 maintainer:          "tim@getup.org.au"
-copyright:           "Tim McEwan"
+copyright:           "GetUp Ltd."
 
 extra-source-files:
 - README.md
@@ -69,12 +69,12 @@ library:
   - TypeOperators
 
   ghc-options:
-    - -Wall
-    - -Wcompat
-    - -Wincomplete-record-updates
-    - -Wincomplete-uni-patterns
-    - -Wredundant-constraints
-    # - -Werror
+  - -Wall
+  - -Wcompat
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wredundant-constraints
+  # - -Werror
 
 executables:
   fraudstop-exe:
