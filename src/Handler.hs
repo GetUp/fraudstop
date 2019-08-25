@@ -102,7 +102,9 @@ data LambdaResponse =
   LambdaResponse
     { body :: String
     }
-  deriving (Show, Generic, FromJSON)
+  deriving (Show, Generic)
+
+instance FromJSON LambdaResponse
 
 invokeLambda :: Region -> Text -> ByteString -> IO BSI.ByteString
 invokeLambda region funcName payload = do
