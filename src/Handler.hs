@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
-
 module Handler
   ( handler
   ) where
