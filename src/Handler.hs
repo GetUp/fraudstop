@@ -24,7 +24,7 @@ import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, encode
 import qualified Data.ByteString.Internal as BSI
 import Data.ByteString.Lazy (ByteString, fromStrict)
 import Data.Maybe (fromMaybe)
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Network.AWS.Data (toBS)
@@ -72,17 +72,17 @@ event :: ByteString
 event =
   encode
     (Details
-       { firstName = pack "alice"
-       , lastName = pack "citizen"
-       , email = pack "tim+alicecitizen@mcewan.it"
-       , address = pack "7 henry dr"
-       , suburb = pack "picnic point"
-       , postcode = pack "2341"
-       , dob = pack "01/01/1900"
-       , phone = pack "0123456789"
-       , crn = pack "123456789x"
-       , debtReason = pack "Lorem ipsum dolor sit amet."
-       , personalCircumstances = [pack "Addiction", pack "sfdg sdfgsdfg dsfg"]
+       { firstName = "alice"
+       , lastName = "citizen"
+       , email = "tim+alicecitizen@mcewan.it"
+       , address = "7 henry dr"
+       , suburb = "picnic point"
+       , postcode = "2341"
+       , dob = "01/01/1900"
+       , phone = "0123456789"
+       , crn = "123456789x"
+       , debtReason = "Lorem ipsum dolor sit amet."
+       , personalCircumstances = ["Addiction", "sfdg sdfgsdfg dsfg"]
        })
 
 handler :: APIGatewayProxyRequest Text -> IO (APIGatewayProxyResponse Text)
@@ -91,7 +91,7 @@ handler request = do
   authEmail <- fromEnv "DOCSAWAY_EMAIL" ""
   key <- fromEnv "DOCSAWAY_KEY" ""
   apiMode <- fromEnv "API_MODE" "TEST"
-  rsp <- invokeLambda NorthVirginia (pack "fraudstop-dev-letter-func") event
+  rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" event
   let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
   case letter of
     Just pdf -> do
