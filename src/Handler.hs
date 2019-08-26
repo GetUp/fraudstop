@@ -99,7 +99,7 @@ handler request = do
     _ -> throw BadLetter
   pure responseOk
 
-data LambdaResponse =
+newtype LambdaResponse =
   LambdaResponse
     { body :: String
     }
@@ -118,7 +118,7 @@ invokeLambda region funcName payload = do
       Nothing -> throw BadLambdaResponse
 
 sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3, ToJSON v4) => v1 -> v2 -> v3 -> v4 -> m Value
-sendLetter authEmail key apiMode letter = do
+sendLetter authEmail key apiMode letter =
   runReq defaultHttpConfig $ do
     let endpoint = https "www.docsaway.com" /: "app" /: "api" /: "rest" /: "mail.json"
     let apiConnection = object ["email" .= authEmail, "key" .= key]
