@@ -1,8 +1,14 @@
 module Handler
   ( handler
+  , dbUrl
   ) where
 
-import AWSLambda.Events.APIGateway (APIGatewayProxyRequest, APIGatewayProxyResponse(..))
+import AWSLambda.Events.APIGateway
+  ( APIGatewayProxyRequest
+  , APIGatewayProxyResponse(APIGatewayProxyResponse)
+  , agprqPath
+  , requestBody
+  )
 import Control.Exception (Exception, throw)
 import Control.Lens ((<&>), (^.), set)
 import Control.Monad.IO.Class (MonadIO)
@@ -24,6 +30,7 @@ import Data.ByteString.Lazy (ByteString, fromStrict)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Typeable (Typeable)
+import Database.PostgreSQL.Simple (Query, connectPostgreSQL, execute)
 import GHC.Generics (Generic)
 import Network.AWS.Data (toBS)
 import Network.AWS.Lambda.Invoke (invoke, irsPayload)
@@ -57,15 +64,15 @@ data Details =
     }
   deriving (Show, Generic)
 
+instance ToJSON Details where
+  toEncoding = genericToEncoding defaultOptions
+
 data CustomException
   = BadLambdaResponse
   | BadLetter
   deriving (Show, Typeable)
 
 instance Exception CustomException
-
-instance ToJSON Details where
-  toEncoding = genericToEncoding defaultOptions
 
 event :: ByteString
 event =
@@ -87,17 +94,26 @@ event =
 handler :: APIGatewayProxyRequest Text -> IO (APIGatewayProxyResponse Text)
 handler request = do
   print request
+  let urlPath = BSI.unpackChars $ request ^. agprqPath
   authEmail <- fromEnv "DOCSAWAY_EMAIL" ""
   key <- fromEnv "DOCSAWAY_KEY" ""
   apiMode <- fromEnv "API_MODE" "TEST"
   rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" event
-  let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
-  case letter of
-    Just pdf -> do
-      result <- sendLetter authEmail key apiMode (body pdf)
-      print result
-    _ -> throw BadLetter
-  pure responseOk
+  url <- dbUrl
+  conn <- connectPostgreSQL url
+  -- details <- extractDetails request
+  let details = request ^. requestBody
+  case (urlPath, details) of
+    (_, deets) -> do
+      _ <- execute conn insertDetails deets
+      let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
+      case letter of
+        Just pdf -> do
+          result <- sendLetter authEmail key apiMode (body pdf)
+          print result
+        _ -> throw BadLetter
+      pure responseOk
+    _ -> pure response404
 
 newtype LambdaResponse =
   LambdaResponse
@@ -154,5 +170,14 @@ fromEnv var fallback = do
 
 responseOk :: APIGatewayProxyResponse body
 responseOk = APIGatewayProxyResponse 200 [] Nothing
--- response404 :: APIGatewayProxyResponse Text
--- response404 = APIGatewayProxyResponse 404 [] Nothing
+
+response404 :: APIGatewayProxyResponse Text
+response404 = APIGatewayProxyResponse 404 [] Nothing
+
+dbUrl :: IO BSI.ByteString
+dbUrl = do
+  envUrl <- lookupEnv "DATABASE_URL"
+  return $ BSI.packChars $ fromMaybe "postgresql://localhost/fraudstop" envUrl
+
+insertDetails :: Query
+insertDetails = "insert into user_requests(created_at, details) values(now(), ?)"

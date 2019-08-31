@@ -29,6 +29,7 @@ dependencies:
 - amazonka
 - amazonka-lambda
 - req
+- postgresql-simple
 
 library:
   source-dirs: src
@@ -102,3 +103,5 @@ tests:
     dependencies:
     - fraudstop
     - hspec
+    - http-types
+    - unordered-containers
