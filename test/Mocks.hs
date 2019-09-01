@@ -6,13 +6,8 @@ import Data.Aeson.TextValue (TextValue(TextValue))
 import Data.ByteString.Internal (ByteString, packChars)
 import Data.HashMap.Strict (fromList)
 import Data.Text (Text)
-import Data.Text.Encoding (decodeUtf8)
-import Network.HTTP.Types.URI (SimpleQuery, renderSimpleQuery)
 
--- import Debug.Trace
-request :: String -> [(ByteString, Maybe ByteString)] -> SimpleQuery -> APIGatewayProxyRequest Text
--- request _ _ body
---   | trace ("Body:" <> (show (renderSimpleQuery False body))) False = undefined
+request :: String -> [(ByteString, Maybe ByteString)] -> Text -> APIGatewayProxyRequest Text
 request path params body =
   APIGatewayProxyRequest
     { _agprqResource = "/{proxy+}"
@@ -77,5 +72,5 @@ request path params body =
                   , _aContext = fromList [("custom_context", toJSON (10 :: Int))]
                   }
           }
-    , _agprqBody = Just (TextValue (decodeUtf8 (renderSimpleQuery False body)))
+    , _agprqBody = Just $ TextValue body
     }
