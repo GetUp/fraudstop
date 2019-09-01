@@ -3,3 +3,4 @@ node_modules/
 .serverless/
 fraudstop.cabal
 *.pdf
+.hspec-failures
