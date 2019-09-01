@@ -1,13 +1,12 @@
-module Handler
-  ( handler
-  , CustomException
-  , dbUrl
-  ) where
+module Handler where
 
 import AWSLambda.Events.APIGateway
   ( APIGatewayProxyRequest
   , APIGatewayProxyResponse(APIGatewayProxyResponse)
+  , agprqHeaders
   , agprqPath
+  , agprqRequestContext
+  , prcStage
   , requestBody
   )
 import Control.Exception (Exception, throw)
@@ -29,15 +28,17 @@ import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, encode
 import qualified Data.ByteString.Internal as BSI
 import Data.ByteString.Lazy (ByteString, fromStrict)
 import Data.Maybe (fromMaybe)
-import Data.Text (Text)
+import Data.Text (Text, pack)
+import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
-import Database.PostgreSQL.Simple (Query, connectPostgreSQL, execute)
+import Database.PostgreSQL.Simple (FromRow, Query, connectPostgreSQL, execute)
+import Database.PostgreSQL.Simple.FromRow
 import GHC.Generics (Generic)
 import Network.AWS.Data (toBS)
 import Network.AWS.Lambda.Invoke (invoke, irsPayload)
 import Network.HTTP.Req
-  ( POST(..)
-  , ReqBodyJson(..)
+  ( POST(POST)
+  , ReqBodyJson(ReqBodyJson)
   , (/:)
   , defaultHttpConfig
   , https
@@ -63,10 +64,12 @@ data Details =
     , debtReason :: Text
     , personalCircumstances :: [Text]
     }
-  deriving (Show, Generic)
+  deriving (Show, Typeable, Generic)
 
 instance ToJSON Details where
   toEncoding = genericToEncoding defaultOptions
+
+instance FromJSON Details
 
 data CustomException
   = BadLambdaResponse
@@ -75,45 +78,31 @@ data CustomException
 
 instance Exception CustomException
 
-event :: ByteString
-event =
-  encode
-    (Details
-       { firstName = "alice"
-       , lastName = "citizen"
-       , email = "tim+alicecitizen@mcewan.it"
-       , address = "7 henry dr"
-       , suburb = "picnic point"
-       , postcode = "2341"
-       , dob = "01/01/1900"
-       , phone = "0123456789"
-       , crn = "123456789x"
-       , debtReason = "Lorem ipsum dolor sit amet."
-       , personalCircumstances = ["Addiction", "sfdg sdfgsdfg dsfg"]
-       })
-
 handler :: APIGatewayProxyRequest Text -> IO (APIGatewayProxyResponse Text)
 handler request = do
-  print request
+  let appUrl = buildAppUrl request
+  -- print request
   let urlPath = BSI.unpackChars $ request ^. agprqPath
   authEmail <- fromEnv "DOCSAWAY_EMAIL" ""
   key <- fromEnv "DOCSAWAY_KEY" ""
   apiMode <- fromEnv "API_MODE" "TEST"
-  rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" event
   url <- dbUrl
   conn <- connectPostgreSQL url
-  -- details <- extractDetails request
   let details = request ^. requestBody
   case (urlPath, details) of
-    (_, Just deets) -> do
+    ("/begin", Just deets) -> do
+      print deets
       _ <- execute conn insertDetails [deets]
-      let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
-      case letter of
-        Just pdf -> do
-          result <- sendLetter authEmail key apiMode (body pdf)
-          print result
-        _ -> throw BadLetter
       pure responseOk
+    -- ("/confirm", _) -> do
+    --   rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" event
+    --   let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
+    --   case letter of
+    --     Just pdf -> do
+    --       result <- sendLetter authEmail key apiMode (body pdf)
+    --       print result
+    --       pure responseOk
+    --     _ -> throw BadLetter
     _ -> pure response404
 
 newtype LambdaResponse =
@@ -182,3 +171,15 @@ dbUrl = do
 
 insertDetails :: Query
 insertDetails = "insert into user_requests(created_at, details) values(now(), ?)"
+
+wrap :: BSI.ByteString -> Text
+wrap = pack . BSI.unpackChars
+
+buildAppUrl :: APIGatewayProxyRequest Text -> Text -> Text
+buildAppUrl request path = do
+  let headers = request ^. agprqHeaders
+  case lookup "Host" headers of
+    Nothing -> error "Hostname not found"
+    Just host -> do
+      let stage = request ^. agprqRequestContext . prcStage
+      "https://" <> wrap host <> "/" <> stage <> path

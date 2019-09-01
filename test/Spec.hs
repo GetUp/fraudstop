@@ -1,7 +1,20 @@
 import AWSLambda.Events.APIGateway (APIGatewayProxyResponse(APIGatewayProxyResponse))
-import Data.Aeson.TextValue (TextValue(TextValue))
+import Data.Aeson
+  ( FromJSON
+  , ToJSON
+  , Value(Object)
+  , Value
+  , (.=)
+  , decode
+  , defaultOptions
+  , encode
+  , genericToEncoding
+  , object
+  , toEncoding
+  , withObject
+  )
 import Data.Text (Text, unpack)
-import Database.PostgreSQL.Simple (Connection, connectPostgreSQL, execute_)
+import Database.PostgreSQL.Simple (Connection, Only(Only), connectPostgreSQL, execute_, query_)
 import Test.Hspec
 
 import Handler
@@ -13,12 +26,18 @@ main = do
   conn <- connectPostgreSQL url
   hspec $
     before_ (setupDb conn) $
-    describe "/connect" $ do
-      let queryParams = [("campaign_id", Just "1")]
-      let postParams = [("CallUUID", "xxxxx"), ("From", "61411111111")]
-      it "should give an intro, proceed to the first call when 1 is pressed, redirect if no input" $ do
-        reqResponse <- handler $ Mocks.request "/connect" queryParams postParams
-        reqResponse `shouldMatchBody` "<Speak language=\"en-GB\" voice=\"MAN\">Welcome to the Test campaign.</Speak>"
+    describe "/begin" $ do
+      let queryParams = [] -- [("campaign_id", Just "1")]
+      it "persists the details and sends a confirmation email" $ do
+        reqResponse <- handler $ Mocks.request "/begin" queryParams details
+        reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
+        [Only requestId] <- query_ conn "select id from user_requests limit 1" :: IO [Only Int]
+        requestId `shouldBe` 1
+        -- [Only (Object details)] <- query_ conn "select details from user_requests limit 1" :: IO [Only Value]
+        -- print details
+        -- details `shouldBe` "123456789x"
+        -- check db
+        -- expect sendgrid api request
 
 setupDb :: Connection -> IO ()
 setupDb conn = do
@@ -27,17 +46,9 @@ setupDb conn = do
 
 flushDb :: Connection -> IO ()
 flushDb conn = do
-  _ <- execute_ conn "truncate targets, calls, callers, campaigns restart identity"
+  _ <- execute_ conn "truncate user_requests, api_logs restart identity cascade"
   return ()
 
-shouldMatchBody :: APIGatewayProxyResponse Text -> Text -> Expectation
-shouldMatchBody (APIGatewayProxyResponse _ _ (Just (TextValue body))) fragment =
-  unpack body `shouldContain` unpack fragment
-shouldMatchBody (APIGatewayProxyResponse 404 _ _) _ = error "response was 404"
-shouldMatchBody _ _ = error "Request was probably malformed"
-
-shouldNotMatchBody :: APIGatewayProxyResponse Text -> Text -> Expectation
-shouldNotMatchBody (APIGatewayProxyResponse _ _ (Just (TextValue body))) fragment =
-  unpack body `shouldNotContain` unpack fragment
-shouldNotMatchBody (APIGatewayProxyResponse 404 _ _) _ = error "response was 404"
-shouldNotMatchBody _ _ = error "Request was probably malformed"
+details :: Text
+details =
+  "{\"firstName\":\"alice\",\"lastName\":\"citizen\",\"email\":\"tim+alicecitizen@mcewan.it\",\"address\":\"7 henry dr\",\"suburb\":\"picnic point\",\"postcode\":\"2341\",\"dob\":\"01/01/1900\",\"phone\":\"0123456789\",\"crn\":\"123456789x\",\"debtReason\":\"Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\",\"emailMP\":true,\"emailMinister\":true,\"submitFoi\":true,\"personalCircumstances\":[\"Addiction\",\"sfdg sdfgsdfg dsfg\"]}"
