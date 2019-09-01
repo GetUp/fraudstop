@@ -1,5 +1,6 @@
 module Handler
   ( handler
+  , CustomException
   , dbUrl
   ) where
 
@@ -104,8 +105,8 @@ handler request = do
   -- details <- extractDetails request
   let details = request ^. requestBody
   case (urlPath, details) of
-    (_, deets) -> do
-      _ <- execute conn insertDetails deets
+    (_, Just deets) -> do
+      _ <- execute conn insertDetails [deets]
       let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
       case letter of
         Just pdf -> do
