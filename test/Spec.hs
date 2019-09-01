@@ -14,7 +14,7 @@ import Data.Aeson
   , withObject
   )
 import Data.Text (Text, unpack)
-import Database.PostgreSQL.Simple (Connection, Only(Only), connectPostgreSQL, execute_, query_)
+import Database.PostgreSQL.Simple (Connection, Only(Only), connectPostgreSQL, execute, execute_, query_)
 import Test.Hspec
 
 import Handler
@@ -25,19 +25,39 @@ main = do
   url <- dbUrl
   conn <- connectPostgreSQL url
   hspec $
-    before_ (setupDb conn) $
-    describe "/begin" $ do
-      let queryParams = [] -- [("campaign_id", Just "1")]
-      it "persists the details and sends a confirmation email" $ do
-        reqResponse <- handler $ Mocks.request "/begin" queryParams details
-        reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
-        [Only requestId] <- query_ conn "select id from user_requests limit 1" :: IO [Only Int]
-        requestId `shouldBe` 1
+    before_ (setupDb conn) $ do
+      describe "/begin" $ do
+        let queryParams = [] -- [("campaign_id", Just "1")]
+        it "persists the details and sends a confirmation email" $ do
+          reqResponse <- handler $ Mocks.request "/begin" queryParams details
+          reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
+          [Only requestId] <- query_ conn "select id from user_requests limit 1" :: IO [Only Int]
+          requestId `shouldBe` 1
         -- [Only (Object details)] <- query_ conn "select details from user_requests limit 1" :: IO [Only Value]
         -- print details
         -- details `shouldBe` "123456789x"
         -- check db
         -- expect sendgrid api request
+      describe "/confirm" $
+        before_ (setupConfirm conn) $ do
+          context "with an invalid token" $ do
+            let queryParams = [("email", Just "tim+alicecitizen@mcewan.it"), ("secure_token", Just "xxx")]
+            it "refuses to do anything" $ do
+              reqResponse <- handler $ Mocks.request "/confirm" queryParams ""
+              reqResponse `shouldBe` APIGatewayProxyResponse 403 [] Nothing
+          context "with a valid token" $ do
+            let queryParams = [("email", Just "tim+alicecitizen@mcewan.it"), ("secure_token", Just "abc")]
+            xit "processes the request" $ do
+              reqResponse <- handler $ Mocks.request "/confirm" queryParams ""
+              reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
+              [Only requestId] <-
+                query_ conn "select id from user_requests where processed_at is not null " :: IO [Only Int]
+              requestId `shouldBe` 1
+
+setupConfirm :: Connection -> IO ()
+setupConfirm conn = do
+  _ <- execute conn insertDetails [details]
+  return ()
 
 setupDb :: Connection -> IO ()
 setupDb conn = do

@@ -94,6 +94,7 @@ handler request = do
       print deets
       _ <- execute conn insertDetails [deets]
       pure responseOk
+    ("/confirm", _) -> pure response403
     -- ("/confirm", _) -> do
     --   rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" event
     --   let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
@@ -163,6 +164,9 @@ responseOk = APIGatewayProxyResponse 200 [] Nothing
 
 response404 :: APIGatewayProxyResponse Text
 response404 = APIGatewayProxyResponse 404 [] Nothing
+
+response403 :: APIGatewayProxyResponse Text
+response403 = APIGatewayProxyResponse 403 [] Nothing
 
 dbUrl :: IO BSI.ByteString
 dbUrl = do
