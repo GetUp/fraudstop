@@ -8,4 +8,4 @@ main :: IO ()
 main = apiGatewayMain handler `catch` errorHandler
   where
     errorHandler :: CustomException -> IO ()
-    errorHandler err = putStrLn (show err)
+    errorHandler = print
