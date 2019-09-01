@@ -76,6 +76,7 @@ library:
   - -Wincomplete-uni-patterns
   - -Wredundant-constraints
   # - -Werror
+  # - -Wmissing-import-lists
 
 executables:
   fraudstop-exe:
