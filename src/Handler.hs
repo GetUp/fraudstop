@@ -4,10 +4,12 @@ import AWSLambda.Events.APIGateway
   ( APIGatewayProxyRequest
   , APIGatewayProxyResponse(APIGatewayProxyResponse)
   , agprqPath
+  , agprqQueryStringParameters
   , requestBody
   )
 import Control.Exception (Exception, throw)
 import Control.Lens ((<&>), (^.), set)
+import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.AWS
   ( Credentials(Discover)
@@ -28,6 +30,7 @@ import Data.List.NonEmpty (fromList)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text.Lazy.Encoding as LE
 import Data.Typeable (Typeable)
 import Database.PostgreSQL.Simple (Query, connectPostgreSQL, execute)
 import GHC.Generics (Generic)
@@ -92,8 +95,13 @@ handler request = do
   conn <- connectPostgreSQL url
   -- print request
   let urlPath = BSI.unpackChars $ request ^. agprqPath
-  let details = request ^. requestBody
-  case (urlPath, details) of
+  -- body <- request ^. requestBody
+  -- case body of
+  --   Just a -> body
+  --   _ -> remaining
+  -- fmap LE.encodeUtf8 ()
+  -- let details = decode () :: Maybe Details
+  case (urlPath, buildParams request) of
     ("/begin", Just deets) -> do
       _ <- execute conn insertDetails [deets]
       -- print deets
@@ -105,24 +113,44 @@ handler request = do
       -- print statusCode
       pure responseOk
     ("/begin", _) -> pure $ response 400
-    ("/confirm", Just deets) -> do
-      let apiMode =
-            if stage == "PROD"
-              then "LIVE"
-              else "TEST"
-      let d = encodeUtf8 deets
-      print d
-      rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ d
-      let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
-      case letter of
-        Just pdf -> do
-          result <- sendLetter authEmail key apiMode (body pdf)
-          print result
-          pure responseOk
-        _ -> throw BadLetter
-    ("/confirm", _) -> pure $ response 403
+    -- ("/confirm", _) -> do
+    --   let apiMode =
+    --         if stage == "PROD"
+    --           then "LIVE"
+    --           else "TEST"
+    --   let d = encodeUtf8 deets
+    --   print d
+    --   rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ d
+    --   let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
+    --   case letter of
+    --     Just pdf -> do
+    --       result <- sendLetter authEmail key apiMode (body pdf)
+    --       print result
+    --       pure responseOk
+    --     _ -> throw BadLetter
+    -- ("/confirm", _) -> pure $ response 403
     _ -> pure $ response 404
 
+data Params =
+  Params
+    { emailParam :: Maybe BSI.ByteString
+    , crnParam :: Maybe BSI.ByteString
+    }
+
+buildParams :: APIGatewayProxyRequest Text -> Params
+buildParams request = Params {emailParam = lookupBody request "email", crnParam = lookupBody request "crn"}
+
+lookupBody :: APIGatewayProxyRequest Text -> BSI.ByteString -> Maybe BSI.ByteString
+lookupBody request param = do
+  body <- request ^. requestBody
+  let params = decode (encodeUtf8 body) :: Maybe Params
+  print params
+  lookup param params
+
+-- lookupParam :: APIGatewayProxyRequest Text -> BSI.ByteString -> Maybe BSI.ByteString
+-- lookupParam request param = do
+--   let params = request ^. agprqQueryStringParameters
+--   join $ lookup param params
 insertDetails :: Query
 insertDetails = "insert into user_requests(created_at, details) values(now(), ?)"
 
