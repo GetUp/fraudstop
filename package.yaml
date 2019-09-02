@@ -30,6 +30,7 @@ dependencies:
 - amazonka-lambda
 - req
 - postgresql-simple
+- sendgrid-v3
 
 default-extensions:
 - ApplicativeDo

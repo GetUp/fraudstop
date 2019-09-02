@@ -25,6 +25,20 @@ packages:
       sha256: d0cfb99557baafa97f0c269c72fca810dd37d958e86056f345c24956f1e05977
   original:
     hackage: retry-0.8.0.1
+- completed:
+    size: 10915
+    url: https://github.com/marcelbuesing/sendgrid-v3/archive/4a14207fcd8909c33056bcd19e6ff639fea8cab5.tar.gz
+    cabal-file:
+      size: 1637
+      sha256: bb433db526524a85e11fb5c43803fae78bd463a6f8043c22c496423ecbeb29ab
+    name: sendgrid-v3
+    version: 0.3.0.0
+    sha256: f1618e055ce683ee67d403ec526d5e2793478ee27cc037152f10237f23584e20
+    pantry-tree:
+      size: 604
+      sha256: a0623748881ce4457811ad29fed157cdb3b25d405137b665dca8669f6cd24b0a
+  original:
+    url: https://github.com/marcelbuesing/sendgrid-v3/archive/4a14207fcd8909c33056bcd19e6ff639fea8cab5.tar.gz
 snapshots:
 - completed:
     size: 500539
