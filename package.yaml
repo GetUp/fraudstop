@@ -67,16 +67,16 @@ default-extensions:
 - TypeFamilyDependencies
 - TypeOperators
 
+ghc-options:
+- -Wall
+- -Wcompat
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wredundant-constraints
+# - -Wmissing-import-lists
+
 library:
   source-dirs: src
-  ghc-options:
-  - -Wall
-  - -Wcompat
-  - -Wincomplete-record-updates
-  - -Wincomplete-uni-patterns
-  - -Wredundant-constraints
-  # - -Werror
-  # - -Wmissing-import-lists
 
 executables:
   fraudstop-exe:
@@ -86,8 +86,6 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall
-    - -Werror
     dependencies:
     - fraudstop
 
@@ -99,8 +97,6 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall
-    - -Werror
     dependencies:
     - fraudstop
     - hspec
