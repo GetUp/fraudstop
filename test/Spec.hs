@@ -41,12 +41,12 @@ main = do
       describe "/confirm" $
         before_ (setupConfirm conn) $ do
           context "with an invalid token" $ do
-            let queryParams = [("email", Just "tim+alicecitizen@mcewan.it"), ("secure_token", Just "xxx")]
+            let queryParams = [("email", Just "tim+alicecitizen@getup.org.au"), ("secure_token", Just "xxx")]
             it "refuses to do anything" $ do
               reqResponse <- handler $ Mocks.request "/confirm" queryParams ""
               reqResponse `shouldBe` APIGatewayProxyResponse 403 [] Nothing
           context "with a valid token" $ do
-            let queryParams = [("email", Just "tim+alicecitizen@mcewan.it"), ("secure_token", Just "abc")]
+            let queryParams = [("email", Just "tim+alicecitizen@getup.org.au"), ("secure_token", Just "abc")]
             xit "processes the request" $ do
               reqResponse <- handler $ Mocks.request "/confirm" queryParams ""
               reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
@@ -71,4 +71,4 @@ flushDb conn = do
 
 details :: Text
 details =
-  "{\"firstName\":\"alice\",\"lastName\":\"citizen\",\"email\":\"tim+alicecitizen@mcewan.it\",\"address\":\"7 henry dr\",\"suburb\":\"picnic point\",\"postcode\":\"2341\",\"dob\":\"01/01/1900\",\"phone\":\"0123456789\",\"crn\":\"123456789x\",\"debtReason\":\"Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\",\"emailMP\":true,\"emailMinister\":true,\"submitFoi\":true,\"personalCircumstances\":[\"Addiction\",\"sfdg sdfgsdfg dsfg\"]}"
+  "{\"firstName\":\"alice\",\"lastName\":\"citizen\",\"email\":\"tim+alicecitizen@getup.org.au\",\"address\":\"7 henry dr\",\"suburb\":\"picnic point\",\"postcode\":\"2341\",\"dob\":\"01/01/1900\",\"phone\":\"0123456789\",\"crn\":\"123456789x\",\"debtReason\":\"Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\",\"emailMP\":true,\"emailMinister\":true,\"submitFoi\":true,\"personalCircumstances\":[\"Addiction\",\"sfdg sdfgsdfg dsfg\"]}"
