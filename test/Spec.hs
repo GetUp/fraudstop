@@ -1,19 +1,5 @@
 import AWSLambda.Events.APIGateway (APIGatewayProxyResponse(APIGatewayProxyResponse))
-import Data.Aeson
-  ( FromJSON
-  , ToJSON
-  , Value(Object)
-  , Value
-  , (.=)
-  , decode
-  , defaultOptions
-  , encode
-  , genericToEncoding
-  , object
-  , toEncoding
-  , withObject
-  )
-import Data.Text (Text, unpack)
+import Data.Text (Text)
 import Database.PostgreSQL.Simple (Connection, Only(Only), connectPostgreSQL, execute, execute_, query_)
 import Test.Hspec
 
