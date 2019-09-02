@@ -3,10 +3,7 @@ module Handler where
 import AWSLambda.Events.APIGateway
   ( APIGatewayProxyRequest
   , APIGatewayProxyResponse(APIGatewayProxyResponse)
-  , agprqHeaders
   , agprqPath
-  , agprqRequestContext
-  , prcStage
   , requestBody
   )
 import Control.Exception (Exception, throw)
@@ -24,17 +21,16 @@ import Control.Monad.Trans.AWS
   , send
   , within
   )
-import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, encode, genericToEncoding, object, toEncoding)
+import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, genericToEncoding, object, toEncoding)
 import qualified Data.ByteString.Internal as BSI
-import Data.ByteString.Lazy (ByteString, fromStrict)
+import Data.ByteString.Lazy (fromStrict)
+import Data.List.NonEmpty (fromList)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
-import Database.PostgreSQL.Simple (FromRow, Query, connectPostgreSQL, execute)
-import Database.PostgreSQL.Simple.FromRow
+import Database.PostgreSQL.Simple (Query, connectPostgreSQL, execute)
 import GHC.Generics (Generic)
-import Network.AWS.Data (toBS)
 import Network.AWS.Lambda.Invoke (invoke, irsPayload)
 import Network.HTTP.Req
   ( POST(POST)
@@ -46,6 +42,14 @@ import Network.HTTP.Req
   , req
   , responseBody
   , runReq
+  )
+import qualified Network.SendGridV3.Api as SG
+import Network.SendGridV3.Api
+  ( ApiKey(ApiKey)
+  , Mail
+  , MailAddress(MailAddress)
+  , MailSettings(MailSettings)
+  , SandboxMode(SandboxMode)
   )
 import System.Environment (lookupEnv)
 import System.IO (stdout)
@@ -80,31 +84,58 @@ instance Exception CustomException
 
 handler :: APIGatewayProxyRequest Text -> IO (APIGatewayProxyResponse Text)
 handler request = do
-  let appUrl = buildAppUrl request
-  -- print request
-  let urlPath = BSI.unpackChars $ request ^. agprqPath
-  authEmail <- fromEnv "DOCSAWAY_EMAIL" ""
-  key <- fromEnv "DOCSAWAY_KEY" ""
-  apiMode <- fromEnv "API_MODE" "TEST"
+  sendGridApiKey <- fromEnvRequired "FRAUDSTOP_SENDGRID_API_KEY"
+  authEmail <- fromEnvRequired "DOCSAWAY_EMAIL"
+  key <- fromEnvRequired "DOCSAWAY_KEY"
+  stage <- fromEnvOptional "STAGE" "DEV"
   url <- dbUrl
   conn <- connectPostgreSQL url
+  -- print request
+  let urlPath = BSI.unpackChars $ request ^. agprqPath
   let details = request ^. requestBody
   case (urlPath, details) of
     ("/begin", Just deets) -> do
-      print deets
       _ <- execute conn insertDetails [deets]
+      -- print deets
+      let sandboxMode =
+            if stage == "TEST"
+              then Just sandbox
+              else Nothing
+      statusCode <- SG.sendMail (ApiKey sendGridApiKey) confirmationEmail {SG._mailMailSettings = sandboxMode}
+      -- print statusCode
       pure responseOk
-    ("/confirm", _) -> pure response403
-    -- ("/confirm", _) -> do
-    --   rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" event
-    --   let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
-    --   case letter of
-    --     Just pdf -> do
-    --       result <- sendLetter authEmail key apiMode (body pdf)
-    --       print result
-    --       pure responseOk
-    --     _ -> throw BadLetter
-    _ -> pure response404
+    ("/begin", _) -> pure $ response 400
+    ("/confirm", Just deets) -> do
+      let apiMode =
+            if stage == "PROD"
+              then "LIVE"
+              else "TEST"
+      let d = encodeUtf8 deets
+      print d
+      rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ d
+      let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
+      case letter of
+        Just pdf -> do
+          result <- sendLetter authEmail key apiMode (body pdf)
+          print result
+          pure responseOk
+        _ -> throw BadLetter
+    ("/confirm", _) -> pure $ response 403
+    _ -> pure $ response 404
+
+insertDetails :: Query
+insertDetails = "insert into user_requests(created_at, details) values(now(), ?)"
+
+confirmationEmail :: Mail () ()
+confirmationEmail =
+  let to = SG.personalization $ fromList [MailAddress "tim+test@getup.org.au" "John Doe"]
+      from = MailAddress "jane@example.com" "Jane Smith"
+      subject = "Email Subject"
+      content = Just $ fromList [SG.mailContentText "Example Content"]
+   in SG.mail [to] from subject content
+
+sandbox :: MailSettings
+sandbox = MailSettings Nothing Nothing Nothing (Just (SandboxMode True)) Nothing
 
 newtype LambdaResponse =
   LambdaResponse
@@ -114,17 +145,17 @@ newtype LambdaResponse =
 
 instance FromJSON LambdaResponse
 
-invokeLambda :: Region -> Text -> ByteString -> IO BSI.ByteString
+invokeLambda :: Region -> Text -> BSI.ByteString -> IO BSI.ByteString
 invokeLambda region funcName payload = do
   lgr <- newLogger Debug stdout
   env <- newEnv Discover <&> set envLogger lgr
   runResourceT . runAWST env . within region $ do
-    rsp <- send $ invoke funcName $ toBS payload
+    rsp <- send $ invoke funcName payload
     case rsp ^. irsPayload of
       Just output -> return output
       Nothing -> throw BadLambdaResponse
 
-sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3, ToJSON v4) => v1 -> v2 -> v3 -> v4 -> m Value
+sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3) => v1 -> v2 -> Text -> v3 -> m Value
 sendLetter authEmail key apiMode letter =
   runReq defaultHttpConfig $ do
     let endpoint = https "www.docsaway.com" /: "app" /: "api" /: "rest" /: "mail.json"
@@ -154,36 +185,25 @@ sendLetter authEmail key apiMode letter =
     r <- req POST endpoint (ReqBodyJson payload) jsonResponse mempty
     return (responseBody r :: Value)
 
-fromEnv :: String -> String -> IO String
-fromEnv var fallback = do
+fromEnvOptional :: String -> String -> IO String
+fromEnvOptional var fallback = do
   envVar <- lookupEnv var
   return $ fromMaybe fallback envVar
+
+fromEnvRequired :: String -> IO Text
+fromEnvRequired var = do
+  envVar <- lookupEnv var
+  case envVar of
+    Just a -> return $ pack a
+    Nothing -> error $ "Please set " <> var
 
 responseOk :: APIGatewayProxyResponse body
 responseOk = APIGatewayProxyResponse 200 [] Nothing
 
-response404 :: APIGatewayProxyResponse Text
-response404 = APIGatewayProxyResponse 404 [] Nothing
-
-response403 :: APIGatewayProxyResponse Text
-response403 = APIGatewayProxyResponse 403 [] Nothing
+response :: Int -> APIGatewayProxyResponse Text
+response n = APIGatewayProxyResponse n [] Nothing
 
 dbUrl :: IO BSI.ByteString
 dbUrl = do
   envUrl <- lookupEnv "DATABASE_URL"
   return $ BSI.packChars $ fromMaybe "postgresql://localhost/fraudstop" envUrl
-
-insertDetails :: Query
-insertDetails = "insert into user_requests(created_at, details) values(now(), ?)"
-
-wrap :: BSI.ByteString -> Text
-wrap = pack . BSI.unpackChars
-
-buildAppUrl :: APIGatewayProxyRequest Text -> Text -> Text
-buildAppUrl request path = do
-  let headers = request ^. agprqHeaders
-  case lookup "Host" headers of
-    Nothing -> error "Hostname not found"
-    Just host -> do
-      let stage = request ^. agprqRequestContext . prcStage
-      "https://" <> wrap host <> "/" <> stage <> path
