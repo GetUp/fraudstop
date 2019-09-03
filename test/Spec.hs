@@ -1,6 +1,9 @@
 import AWSLambda.Events.APIGateway (APIGatewayProxyResponse(APIGatewayProxyResponse))
+import qualified Data.ByteString.Internal as BSI
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
-import Database.PostgreSQL.Simple (Connection, Only(Only), connectPostgreSQL, execute, execute_, query_)
+import Database.PostgreSQL.Simple (Connection, Only(Only), Query, connectPostgreSQL, execute, execute_, query_)
+import System.Environment (lookupEnv)
 import Test.Hspec
 
 import Handler
@@ -8,7 +11,7 @@ import Mocks
 
 main :: IO ()
 main = do
-  url <- dbUrl
+  url <- testDbUrl
   conn <- connectPostgreSQL url
   hspec $
     before_ (setupDb conn) $ do
@@ -41,7 +44,7 @@ main = do
 
 setupConfirm :: Connection -> IO ()
 setupConfirm conn = do
-  _ <- execute conn insertDetails [details]
+  _ <- execute conn insertTestDetails [details]
   return ()
 
 setupDb :: Connection -> IO ()
@@ -53,6 +56,14 @@ flushDb :: Connection -> IO ()
 flushDb conn = do
   _ <- execute_ conn "truncate user_requests, api_logs restart identity cascade"
   return ()
+
+testDbUrl :: IO BSI.ByteString
+testDbUrl = do
+  envUrl <- lookupEnv "DATABASE_URL"
+  return $ BSI.packChars $ fromMaybe "postgresql://localhost/fraudstop" envUrl
+
+insertTestDetails :: Query
+insertTestDetails = "insert into user_requests(created_at, details) values(now(), ?)"
 
 details :: Text
 details =
