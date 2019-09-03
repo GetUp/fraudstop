@@ -6,9 +6,13 @@ import AWSLambda.Events.APIGateway
   , requestBody
   )
 import Control.Lens ((^.))
-import Data.Aeson (FromJSON, ToJSON, defaultOptions, genericToEncoding, toEncoding)
+import Data.Aeson (FromJSON, ToJSON, decode, defaultOptions, genericToEncoding, toEncoding)
+
+import Data.ByteString.Lazy (ByteString, fromStrict)
 import Data.Text (Text)
-import Data.Typeable (typeOf)
+import Data.Text.Encoding (encodeUtf8)
+
+-- import Data.Typeable (typeOf)
 import GHC.Generics (Generic)
 
 data Details =
@@ -32,12 +36,16 @@ instance ToJSON Details where
 
 instance FromJSON Details
 
+recode :: Text -> ByteString
+recode = fromStrict . encodeUtf8
+
 handler :: APIGatewayProxyRequest Text -> IO (APIGatewayProxyResponse Text)
 handler request = do
   let body = request ^. requestBody
   case body of
     Just bod -> do
-      print $ typeOf bod
+      let deets = decode (recode bod) :: Maybe Details
+      print $ deets
       -- case (decode bod :: Maybe Details) of
       --   Just deets -> pure $ response 200
       --   Nothing -> pure $ response 403
