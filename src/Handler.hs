@@ -23,7 +23,7 @@ import Control.Monad.Trans.AWS
   )
 import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, encode, genericToEncoding, object, toEncoding)
 import qualified Data.ByteString.Internal as BSI
-import Data.ByteString.Lazy (fromStrict)
+import Data.ByteString.Lazy (fromStrict, toStrict)
 import Data.List.NonEmpty (fromList)
 import Data.Maybe (fromMaybe)
 import Data.MonoTraversable (replaceElemStrictText)
@@ -79,8 +79,12 @@ instance FromJSON Details
 detailDecoder :: Text -> Maybe Details
 detailDecoder = decode . fromStrict . encodeUtf8
 
--- detailDbDecoder :: Value -> Maybe Details
--- detailDbDecoder = decode . fromStrict . encodeUtf8
+detailDbDecoder :: Text -> Maybe Details
+detailDbDecoder = decode . fromStrict . encodeUtf8
+
+dbEncode :: Details -> BSI.ByteString
+dbEncode = toStrict . encode
+
 data Confirmation =
   Confirmation
     { requestId :: Int
@@ -130,16 +134,15 @@ handler request = do
       -- TODO validate token
       case maybeConfirmation of
         Just confirmation -> do
-          [Only maybeDetails] <- query conn maybeAcquireDetails [requestId confirmation] -- :: Maybe Value
+          [Only maybeDetails] <- query conn maybeAcquireDetails [requestId confirmation]
           print maybeDetails
-          case (maybeDetails :: Maybe BSI.ByteString) -- >>= detailDbDecoder of
-                of
+          case maybeDetails >>= detailDbDecoder of
             Just details -> do
               let apiMode =
                     if stage == "PROD"
                       then "LIVE"
                       else "TEST"
-              rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" details
+              rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ dbEncode details
               let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
               case letter of
                 Just pdf -> do
@@ -156,7 +159,7 @@ insertDetails = "insert into user_requests(created_at, details) values(now(), ?)
 
 maybeAcquireDetails :: Query
 maybeAcquireDetails =
-  "insert into user_requests(locked_at) values(now()) where locked_at is null and id = ? returning details"
+  "update user_requests set locked_at = now() where processed_at is null and locked_at is null and id = ? returning details"
 
 confirmationEmail :: String -> Details -> Int -> Mail () ()
 confirmationEmail stage details requestId =
