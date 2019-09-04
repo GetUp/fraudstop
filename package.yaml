@@ -31,6 +31,7 @@ dependencies:
 - req
 - postgresql-simple
 - sendgrid-v3
+- mono-traversable
 
 default-extensions:
 - ApplicativeDo

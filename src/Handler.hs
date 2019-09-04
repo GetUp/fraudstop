@@ -21,15 +21,16 @@ import Control.Monad.Trans.AWS
   , send
   , within
   )
-import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, genericToEncoding, object, toEncoding)
+import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, encode, genericToEncoding, object, toEncoding)
 import qualified Data.ByteString.Internal as BSI
 import Data.ByteString.Lazy (fromStrict)
 import Data.List.NonEmpty (fromList)
 import Data.Maybe (fromMaybe)
+import Data.MonoTraversable (replaceElemStrictText)
 import Data.Text (Text, pack)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
-import Database.PostgreSQL.Simple (Query, connectPostgreSQL, execute)
+import Database.PostgreSQL.Simple (Only(Only), Query, connectPostgreSQL, query)
 import GHC.Generics (Generic)
 import Network.AWS.Lambda.Invoke (invoke, irsPayload)
 import Network.HTTP.Req
@@ -75,6 +76,26 @@ instance ToJSON Details where
 
 instance FromJSON Details
 
+detailDecoder :: Text -> Maybe Details
+detailDecoder = decode . fromStrict . encodeUtf8
+
+-- detailDbDecoder :: Value -> Maybe Details
+-- detailDbDecoder = decode . fromStrict . encodeUtf8
+data Confirmation =
+  Confirmation
+    { requestId :: Int
+    , token :: Text
+    }
+  deriving (Show, Typeable, Generic)
+
+instance ToJSON Confirmation where
+  toEncoding = genericToEncoding defaultOptions
+
+instance FromJSON Confirmation
+
+confirmationDecoder :: Text -> Maybe Confirmation
+confirmationDecoder = decode . fromStrict . encodeUtf8
+
 data CustomException
   = BadLambdaResponse
   | BadLetter
@@ -92,50 +113,76 @@ handler request = do
   conn <- connectPostgreSQL url
   -- print request
   let urlPath = BSI.unpackChars $ request ^. agprqPath
-  let details = request ^. requestBody
-  case (urlPath, details) of
-    ("/begin", Just deets) -> do
-      _ <- execute conn insertDetails [deets]
-      -- print deets
-      let sandboxMode =
-            if stage == "TEST"
-              then Just sandbox
-              else Nothing
-      statusCode <- SG.sendMail (ApiKey sendGridApiKey) confirmationEmail {SG._mailMailSettings = sandboxMode}
-      -- print statusCode
-      pure responseOk
-    ("/begin", _) -> pure $ response 400
-    ("/confirm", Just deets) -> do
-      let apiMode =
-            if stage == "PROD"
-              then "LIVE"
-              else "TEST"
-      let d = encodeUtf8 deets
-      print d
-      rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ d
-      let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
-      case letter of
-        Just pdf -> do
-          result <- sendLetter authEmail key apiMode (body pdf)
-          print result
+  case urlPath of
+    "/begin" -> do
+      let maybeDetails = request ^. requestBody >>= detailDecoder
+      case maybeDetails of
+        Just details -> do
+          [Only requestId] <- query conn insertDetails [encode details]
+          let envelope = confirmationEmail stage details requestId
+          print envelope
+          status <- SG.sendMail (ApiKey sendGridApiKey) envelope {SG._mailMailSettings = sandboxMode stage}
+          print status
           pure responseOk
-        _ -> throw BadLetter
-    ("/confirm", _) -> pure $ response 403
+        Nothing -> pure $ response 400
+    "/confirm" -> do
+      let maybeConfirmation = request ^. requestBody >>= confirmationDecoder
+      -- TODO validate token
+      case maybeConfirmation of
+        Just confirmation -> do
+          [Only maybeDetails] <- query conn maybeAcquireDetails [requestId confirmation] -- :: Maybe Value
+          print maybeDetails
+          case (maybeDetails :: Maybe BSI.ByteString) -- >>= detailDbDecoder of
+                of
+            Just details -> do
+              let apiMode =
+                    if stage == "PROD"
+                      then "LIVE"
+                      else "TEST"
+              rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" details
+              let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
+              case letter of
+                Just pdf -> do
+                  result <- sendLetter authEmail key apiMode (body pdf)
+                  print result
+                  pure responseOk
+                _ -> throw BadLetter
+            Nothing -> pure $ response 403
+        Nothing -> pure $ response 403
     _ -> pure $ response 404
 
 insertDetails :: Query
-insertDetails = "insert into user_requests(created_at, details) values(now(), ?)"
+insertDetails = "insert into user_requests(created_at, details) values(now(), ?) returning id"
 
-confirmationEmail :: Mail () ()
-confirmationEmail =
-  let to = SG.personalization $ fromList [MailAddress "tim+test@getup.org.au" "John Doe"]
-      from = MailAddress "jane@example.com" "Jane Smith"
-      subject = "Email Subject"
-      content = Just $ fromList [SG.mailContentText "Example Content"]
+maybeAcquireDetails :: Query
+maybeAcquireDetails =
+  "insert into user_requests(locked_at) values(now()) where locked_at is null and id = ? returning details"
+
+confirmationEmail :: String -> Details -> Int -> Mail () ()
+confirmationEmail stage details requestId =
+  let sanitisedAddress = replaceElemStrictText '@' '_' $ email details
+      emailAddress =
+        if stage == "PROD"
+          then email details
+          else "tech+" <> sanitisedAddress <> "@getup.org.au"
+      recipient = MailAddress emailAddress (firstName details <> lastName details)
+      to = SG.personalization $ fromList [recipient]
+      from = MailAddress "info+fraudstop@getup.org.au" "GetUp"
+      subject = "Please confirm your email address"
+      content = Just $ fromList [SG.mailContentHtml $ confirmationEmailContent details requestId]
    in SG.mail [to] from subject content
 
-sandbox :: MailSettings
-sandbox = MailSettings Nothing Nothing Nothing (Just (SandboxMode True)) Nothing
+confirmationEmailContent :: Details -> Int -> Text
+confirmationEmailContent d requestId =
+  let link = "https://raise-newstart.com/fraudstop/confirm?request_id=" <> tShow requestId
+   in "Dear " <> firstName d <> ",<br><br>Your FraudStop appeal request has been received.<br><br><a href=\"" <> link <>
+      "\">Please confirm your email so that your request can be processed.</a><br><br>You will receive a confirmation email when processing is complete. If you do not receive a confirmation email within 24 hours, please call us on (02) 9211 4400.<br><br>You may also receive BCC copies of several other emails, if you chose those options.  These are for your reference only; you do not need to do anything further with them.<br><br>Thank you for using FraudStop."
+
+sandboxMode :: String -> Maybe MailSettings
+sandboxMode stage =
+  if stage == "TEST"
+    then Just (MailSettings Nothing Nothing Nothing (Just (SandboxMode True)) Nothing)
+    else Nothing
 
 newtype LambdaResponse =
   LambdaResponse
@@ -207,3 +254,6 @@ dbUrl :: IO BSI.ByteString
 dbUrl = do
   envUrl <- lookupEnv "DATABASE_URL"
   return $ BSI.packChars $ fromMaybe "postgresql://localhost/fraudstop" envUrl
+
+tShow :: Int -> Text
+tShow = pack . show

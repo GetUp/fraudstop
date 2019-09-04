@@ -20,8 +20,9 @@ main = do
         it "persists the details and sends a confirmation email" $ do
           reqResponse <- handler $ Mocks.request "/begin" queryParams details
           reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
-          [Only requestId] <- query_ conn "select id from user_requests limit 1" :: IO [Only Int]
-          requestId `shouldBe` 1
+          [Only requestsCount] <-
+            query_ conn "select count(id) from user_requests where details is not null" :: IO [Only Int]
+          requestsCount `shouldBe` 1
         -- [Only (Object details)] <- query_ conn "select details from user_requests limit 1" :: IO [Only Value]
         -- print details
         -- details `shouldBe` "123456789x"
