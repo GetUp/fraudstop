@@ -150,6 +150,7 @@ handler request = do
                   print result
                   pure responseOk
                 _ -> throw BadLetter
+              pure $ response 403
             Nothing -> pure $ response 403
         Nothing -> pure $ response 403
     _ -> pure $ response 404
