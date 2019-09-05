@@ -21,6 +21,7 @@ import Control.Monad.Trans.AWS
   , send
   , within
   )
+import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)
 import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, encode, genericToEncoding, object, toEncoding)
 import qualified Data.ByteString.Internal as BSI
 import Data.ByteString.Lazy (fromStrict, toStrict)
@@ -30,8 +31,9 @@ import Data.MonoTraversable (replaceElemStrictText)
 import Data.Text (Text, pack)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
-import Database.PostgreSQL.Simple (Only(Only), Query, connectPostgreSQL, query)
+import Database.PostgreSQL.Simple (Connection, Only(Only), Query, connectPostgreSQL, query)
 import Database.PostgreSQL.Simple.FromField (FromField, fromField, fromJSONField)
+import Database.PostgreSQL.Simple.ToRow (ToRow)
 import GHC.Generics (Generic)
 import Network.AWS.Lambda.Invoke (invoke, irsPayload)
 import Network.HTTP.Req
@@ -131,29 +133,27 @@ handler request = do
           pure responseOk
         Nothing -> pure $ response 400
     "/confirm" -> do
-      let maybeConfirmation = request ^. requestBody >>= confirmationDecoder
-      -- TODO validate token
-      case maybeConfirmation of
-        Just confirmation -> do
-          [Only (maybeDetails :: Maybe Details)] <- query conn maybeAcquireDetails [requestId confirmation]
-          case maybeDetails of
-            Just details -> do
-              let apiMode =
-                    if stage == "PROD"
-                      then "LIVE"
-                      else "TEST"
-              rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ dbEncode details
-              let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
-              case letter of
-                Just pdf -> do
-                  result <- sendLetter authEmail key apiMode (body pdf)
-                  print result
-                  pure responseOk
-                _ -> throw BadLetter
-              pure $ response 403
-            Nothing -> pure $ response 403
+      result <-
+        runMaybeT $ do
+          confirmation <- MaybeT $ pure $ (request ^. requestBody >>= confirmationDecoder)
+          details <- MaybeT $ acquireDetails conn [requestId confirmation]
+          pdf <- MaybeT $ getPdfFromLambda details
+          MaybeT $ sendLetter authEmail key stage (body pdf)
+      case result of
+        Just _ -> pure responseOk
         Nothing -> pure $ response 403
     _ -> pure $ response 404
+
+maybeFirstValue :: [Only (Maybe a)] -> Maybe a
+maybeFirstValue [Only (Just a)] = Just a
+maybeFirstValue _ = Nothing
+
+acquireDetails :: (Database.PostgreSQL.Simple.ToRow.ToRow q) => Connection -> q -> IO (Maybe Details)
+acquireDetails conn args = fmap maybeFirstValue $ query conn maybeAcquireDetails args
+
+getPdfFromLambda :: Details -> IO (Maybe LambdaResponse)
+getPdfFromLambda details =
+  (fmap (decode . fromStrict) (invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ dbEncode details))
 
 insertDetails :: Query
 insertDetails = "insert into user_requests(created_at, details) values(now(), ?) returning id"
@@ -206,9 +206,13 @@ invokeLambda region funcName payload = do
       Just output -> return output
       Nothing -> throw BadLambdaResponse
 
-sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3) => v1 -> v2 -> Text -> v3 -> m Value
-sendLetter authEmail key apiMode letter =
+sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3) => v1 -> v2 -> String -> v3 -> m (Maybe Value)
+sendLetter authEmail key stage letter =
   runReq defaultHttpConfig $ do
+    let apiMode =
+          if stage == "PROD"
+            then "LIVE"
+            else "TEST"
     let endpoint = https "www.docsaway.com" /: "app" /: "api" /: "rest" /: "mail.json"
     let apiConnection = object ["email" .= authEmail, "key" .= key]
     let printingStation =
@@ -227,14 +231,14 @@ sendLetter authEmail key apiMode letter =
     let payload =
           object
             [ "APIConnection" .= apiConnection
-            , "APIMode" .= apiMode
+            , "APIMode" .= (apiMode :: Text)
             , "APIReport" .= True
             , "PDFFile" .= letter
             , "PrintingStation" .= printingStation
             , "Recipient" .= recipient
             ]
     r <- req POST endpoint (ReqBodyJson payload) jsonResponse mempty
-    return (responseBody r :: Value)
+    return $ Just (responseBody r :: Value)
 
 fromEnvOptional :: String -> String -> IO String
 fromEnvOptional var fallback = do
