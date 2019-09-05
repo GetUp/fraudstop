@@ -4,10 +4,10 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Database.PostgreSQL.Simple (Connection, Only(Only), Query, connectPostgreSQL, execute, execute_, query_)
 import System.Environment (lookupEnv)
-import Test.Hspec
+import Test.Hspec (before_, context, describe, hspec, it, shouldBe, xit)
 
-import Handler
-import Mocks
+import Handler (handler)
+import qualified Mocks as Mock
 
 main :: IO ()
 main = do
@@ -17,7 +17,7 @@ main = do
     before_ (setupDb conn) $ do
       describe "/begin" $
         xit "persists the details and sends a confirmation email" $ do
-          reqResponse <- handler $ Mocks.request "/begin" [] details
+          reqResponse <- handler $ Mock.request "/begin" [] details
           reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
           [Only requestsCount] <-
             query_ conn "select count(id) from user_requests where details is not null" :: IO [Only Int]
@@ -31,12 +31,12 @@ main = do
           context "with an invalid token" $ do
             let body = invalidConfirmation
             it "refuses to do anything" $ do
-              reqResponse <- handler $ Mocks.request "/confirm" [] body
+              reqResponse <- handler $ Mock.request "/confirm" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 403 [] Nothing
           context "with a valid token" $ do
             let body = validConfirmation
             it "processes the request" $ do
-              reqResponse <- handler $ Mocks.request "/confirm" [] body
+              reqResponse <- handler $ Mock.request "/confirm" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
               [Only requestId] <-
                 query_ conn "select id from user_requests where processed_at is not null " :: IO [Only Int]
