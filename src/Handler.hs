@@ -31,6 +31,7 @@ import Data.Text (Text, pack)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
 import Database.PostgreSQL.Simple (Only(Only), Query, connectPostgreSQL, query)
+import Database.PostgreSQL.Simple.FromField (FromField, fromField, fromJSONField)
 import GHC.Generics (Generic)
 import Network.AWS.Lambda.Invoke (invoke, irsPayload)
 import Network.HTTP.Req
@@ -76,11 +77,11 @@ instance ToJSON Details where
 
 instance FromJSON Details
 
+instance FromField Details where
+  fromField = fromJSONField
+
 detailDecoder :: Text -> Maybe Details
 detailDecoder = decode . fromStrict . encodeUtf8
-
-detailDbDecoder :: Text -> Maybe Details
-detailDbDecoder = decode . fromStrict . encodeUtf8
 
 dbEncode :: Details -> BSI.ByteString
 dbEncode = toStrict . encode
@@ -134,9 +135,8 @@ handler request = do
       -- TODO validate token
       case maybeConfirmation of
         Just confirmation -> do
-          [Only maybeDetails] <- query conn maybeAcquireDetails [requestId confirmation]
-          print maybeDetails
-          case maybeDetails >>= detailDbDecoder of
+          [Only (maybeDetails :: Maybe Details)] <- query conn maybeAcquireDetails [requestId confirmation]
+          case maybeDetails of
             Just details -> do
               let apiMode =
                     if stage == "PROD"
