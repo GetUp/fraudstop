@@ -6,6 +6,7 @@ import Database.PostgreSQL.Simple (Connection, Only(Only), Query, connectPostgre
 import System.Environment (lookupEnv)
 import Test.Hspec (before_, context, describe, hspec, it, shouldBe, xit)
 
+-- import Handler (handler, secureToken)
 import Handler (handler)
 import qualified Mocks as Mock
 
@@ -16,7 +17,7 @@ main = do
   hspec $
     before_ (setupDb conn) $ do
       describe "/begin" $
-        xit "persists the details and sends a confirmation email" $ do
+        it "persists the details and sends a confirmation email" $ do
           reqResponse <- handler $ Mock.request "/begin" [] details
           reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
           [Only requestsCount] <-
@@ -30,17 +31,23 @@ main = do
         before_ (setupConfirm conn) $ do
           context "with an invalid token" $ do
             let body = invalidConfirmation
-            it "refuses to do anything" $ do
+            xit "refuses to do anything" $ do
               reqResponse <- handler $ Mock.request "/confirm" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 403 [] Nothing
           context "with a valid token" $ do
             let body = validConfirmation
-            it "processes the request" $ do
+            xit "processes the request" $ do
               reqResponse <- handler $ Mock.request "/confirm" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
               [Only requestId] <-
                 query_ conn "select id from user_requests where processed_at is not null " :: IO [Only Int]
               requestId `shouldBe` 1
+      -- describe "#secureToken" $ do
+      --   let salt = "abcdefg"
+      --   let email = "tim+alicecitizen@getup.org.au"
+      --   it "hashes the email address" $
+      --     secureToken salt email `shouldBe`
+      --     "c8d90843e135fbbf3fa67ff124624f31b9c071e99af5113476d04db9d1fa6e69"
 
 setupConfirm :: Connection -> IO ()
 setupConfirm conn = do

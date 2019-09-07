@@ -32,6 +32,7 @@ dependencies:
 - postgresql-simple
 - sendgrid-v3
 - mono-traversable
+- cryptonite
 
 default-extensions:
 - ApplicativeDo

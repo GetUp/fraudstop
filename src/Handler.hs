@@ -21,6 +21,7 @@ import Control.Monad.Trans.AWS
   , send
   , within
   )
+import Crypto.Hash (SHA256(SHA256), hashWith)
 import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, encode, genericToEncoding, object, toEncoding)
 import qualified Data.ByteString.Internal as BSI
 import Data.ByteString.Lazy (fromStrict, toStrict)
@@ -178,7 +179,9 @@ confirmationEmail stage details requestId =
 
 confirmationEmailContent :: Details -> Int -> Text
 confirmationEmailContent d requestId =
-  let link = "https://raise-newstart.com/fraudstop/confirm?request_id=" <> tShow requestId
+  let secureToken = tShow $ hashWith SHA256 $ encodeUtf8 $ email d <> "abcdef"
+      params = "?request_id=" <> tShow requestId <> "&secure_token=" <> secureToken
+      link = "https://raise-newstart.com/fraudstop/confirm" <> params
    in "Dear " <> firstName d <> ",<br><br>Your FraudStop appeal request has been received.<br><br><a href=\"" <> link <>
       "\">Please confirm your email so that your request can be processed.</a><br><br>You will receive a confirmation email when processing is complete. If you do not receive a confirmation email within 24 hours, please call us on (02) 9211 4400.<br><br>You may also receive BCC copies of several other emails, if you chose those options.  These are for your reference only; you do not need to do anything further with them.<br><br>Thank you for using FraudStop."
 
@@ -259,5 +262,5 @@ dbUrl = do
   envUrl <- lookupEnv "DATABASE_URL"
   return $ BSI.packChars $ fromMaybe "postgresql://localhost/fraudstop" envUrl
 
-tShow :: Int -> Text
+tShow :: Show a => a -> Text
 tShow = pack . show
