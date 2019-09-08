@@ -125,7 +125,8 @@ handler request = do
       case maybeDetails of
         Just details -> do
           [Only requestId] <- query conn insertDetails [encode details]
-          let envelope = confirmationEmail stage details requestId
+          salt <- fromEnvOptional "SALT" ""
+          let envelope = confirmationEmail stage (pack salt) details requestId
           print envelope
           status <- SG.sendMail (ApiKey sendGridApiKey) envelope {SG._mailMailSettings = sandboxMode stage}
           print status
@@ -159,8 +160,8 @@ maybeAcquireDetails :: Query
 maybeAcquireDetails =
   "update user_requests set locked_at = now() where processed_at is null and locked_at is null and id = ? returning details"
 
-confirmationEmail :: String -> Details -> Int -> Mail () ()
-confirmationEmail stage details requestId =
+confirmationEmail :: String -> Text -> Details -> Int -> Mail () ()
+confirmationEmail stage salt details requestId =
   let sanitisedAddress = replaceElemStrictText '@' '_' $ email details
       emailAddress =
         if stage == "PROD"
@@ -170,12 +171,12 @@ confirmationEmail stage details requestId =
       to = SG.personalization $ fromList [recipient]
       from = MailAddress "info+fraudstop@getup.org.au" "GetUp"
       subject = "Please confirm your email address"
-      content = Just $ fromList [SG.mailContentHtml $ confirmationEmailContent details requestId]
+      content = Just $ fromList [SG.mailContentHtml $ confirmationEmailContent salt details requestId]
    in SG.mail [to] from subject content
 
-confirmationEmailContent :: Details -> Int -> Text
-confirmationEmailContent d requestId =
-  let secureToken = tShow $ hashWith SHA256 $ encodeUtf8 $ email d <> "abcdef"
+confirmationEmailContent :: Text -> Details -> Int -> Text
+confirmationEmailContent salt d requestId =
+  let secureToken = tShow $ hashWith SHA256 $ encodeUtf8 $ email d <> salt
       params = "?request_id=" <> tShow requestId <> "&secure_token=" <> secureToken
       link = "https://raise-newstart.com/fraudstop/confirm" <> params
    in "Dear " <> firstName d <> ",<br><br>Your FraudStop appeal request has been received.<br><br><a href=\"" <> link <>
