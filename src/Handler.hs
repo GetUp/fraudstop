@@ -139,15 +139,11 @@ handler request = do
           [Only (maybeDetails :: Maybe Details)] <- query conn maybeAcquireDetails [requestId confirmation]
           case maybeDetails of
             Just details -> do
-              let apiMode =
-                    if stage == "PROD"
-                      then "LIVE"
-                      else "TEST"
               rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ dbEncode details
               let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
               case letter of
                 Just pdf -> do
-                  result <- sendLetter authEmail key apiMode (body pdf)
+                  result <- sendLetter authEmail key stage (body pdf)
                   print result
                   pure responseOk
                 _ -> throw BadLetter
@@ -209,9 +205,13 @@ invokeLambda region funcName payload = do
       Just output -> return output
       Nothing -> throw BadLambdaResponse
 
-sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3) => v1 -> v2 -> Text -> v3 -> m Value
-sendLetter authEmail key apiMode letter =
+sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3) => v1 -> v2 -> String -> v3 -> m Value
+sendLetter authEmail key stage letter =
   runReq defaultHttpConfig $ do
+    let apiMode =
+          if stage == "PROD"
+            then "LIVE"
+            else "TEST"
     let endpoint = https "www.docsaway.com" /: "app" /: "api" /: "rest" /: "mail.json"
     let apiConnection = object ["email" .= authEmail, "key" .= key]
     let printingStation =
@@ -230,7 +230,7 @@ sendLetter authEmail key apiMode letter =
     let payload =
           object
             [ "APIConnection" .= apiConnection
-            , "APIMode" .= apiMode
+            , "APIMode" .= (apiMode :: Text)
             , "APIReport" .= True
             , "PDFFile" .= letter
             , "PrintingStation" .= printingStation
