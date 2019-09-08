@@ -31,12 +31,12 @@ main = do
         before_ (setupConfirm conn) $ do
           context "with an invalid token" $ do
             let body = invalidConfirmation
-            xit "refuses to do anything" $ do
+            it "refuses to do anything" $ do
               reqResponse <- handler $ Mock.request "/confirm" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 403 [] Nothing
           context "with a valid token" $ do
             let body = validConfirmation
-            xit "processes the request" $ do
+            it "processes the request" $ do
               reqResponse <- handler $ Mock.request "/confirm" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
               [Only requestId] <-
