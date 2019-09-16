@@ -54,8 +54,10 @@ import Network.HTTP.Req
 import qualified Network.SendGridV3.Api as SG
 import Network.SendGridV3.Api
   ( ApiKey(ApiKey)
+  , Disposition(Attachment)
   , Mail
   , MailAddress(MailAddress)
+  , MailAttachment(MailAttachment)
   , MailSettings(MailSettings)
   , SandboxMode(SandboxMode)
   )
@@ -210,6 +212,31 @@ verificationEmailContent token d requestId =
       link = "https://raise-newstart.com/fraudstop/verify" <> params
    in "Dear " <> firstName d <> ",<br><br>Your FraudStop appeal request has been received.<br><br><a href=\"" <> link <>
       "\">Please click here to verify your email address so that your request can be processed.</a><br><br>You will receive a confirmation email when processing is complete. If you do not receive a confirmation email within 24 hours, please call us on (02) 9211 4400.<br><br>You may also receive BCC copies of several other emails, if you chose those options.  These are for your reference only; you do not need to do anything further with them.<br><br>Thank you for using FraudStop."
+
+confirmationEmail :: (Text -> Text -> SG.Personalization) -> Details -> String -> Mail () ()
+confirmationEmail addresser details letter =
+  let fName = firstName details
+      to = addresser (email details) (fName <> " " <> lastName details)
+      from = MailAddress "info+fraudstop@getup.org.au" "GetUp"
+      subject = "Request processed confirmation"
+      content = Just $ fromList [SG.mailContentText $ confirmationEmailContent fName]
+      attachment = createAttachment $ pack letter
+   in (SG.mail [to] from subject content) {SG._mailAttachments = Just [attachment]}
+
+confirmationEmailContent :: Text -> Text
+confirmationEmailContent name =
+  "Dear " <> name <>
+  ", your request has been processed.  A review letter has been sent to Centrelink on your behalf. A digital copy of the letter has been attached for your reference.\n\nPS You may also receive BCC copies of several other emails, if you chose those options.  These are for your reference only; you do not need to do anything further with them."
+
+createAttachment :: Text -> MailAttachment
+createAttachment pdf =
+  MailAttachment
+    { SG._mailAttachmentContent = pdf
+    , SG._mailAttachmentType = Just "application/pdf"
+    , SG._mailAttachmentFilename = "review_request.pdf"
+    , SG._mailAttachmentDisposition = Just Attachment
+    , SG._mailAttachmentContentId = ""
+    }
 
 foiEmail :: (Text -> Text -> SG.Personalization) -> Details -> Mail () ()
 foiEmail addresser details =
