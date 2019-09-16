@@ -26,8 +26,8 @@ main = do
         -- print details
         -- details `shouldBe` "123456789x"
         -- expect sendgrid api request?
-      describe "/confirm" $
-        before_ (setupConfirm conn) $ do
+      describe "/verify" $
+        before_ (setupVerify conn) $ do
           context "with an invalid token" $ do
             let body = invalidVerification
             it "refuses to do anything" $ do
@@ -47,8 +47,8 @@ main = do
         it "hashes the email address" $
           secureToken salt requestId `shouldBe` "ec5acefa44cf8383f4ebaff94b6bfa200a9fdbe92aaf11481907c040c4a11b54"
 
-setupConfirm :: Connection -> IO ()
-setupConfirm conn = do
+setupVerify :: Connection -> IO ()
+setupVerify conn = do
   _ <- execute conn insertTestDetails [details]
   return ()
 

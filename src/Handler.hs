@@ -139,13 +139,11 @@ handler request = do
         Just details -> do
           [Only requestId] <- query conn insertDetails [encode details]
           let token = securer requestId
-          let verificationMail = verificationEmail addresser token details requestId
-          print verificationMail
-          status <- mailer verificationMail
+          status <- mailer verificationEmail addresser token details requestId
           print status
           pure responseOk
         Nothing -> pure $ response 400
-    "/confirm" -> do
+    "/verify" -> do
       let maybeVerification = request ^. requestBody >>= verificationDecoder
       case maybeVerification of
         Just verification -> do
@@ -160,6 +158,8 @@ handler request = do
                            Just pdf -> do
                              result <- sendLetter docsEmail docsKey stage (body pdf)
                              print result
+                             confirmationStatus <- mailer $ confirmationEmail addresser details (body pdf)
+                             print confirmationStatus
                              foiStatus <- mailer $ foiEmail addresser details
                              print foiStatus
                              pure responseOk
@@ -207,7 +207,7 @@ verificationEmail addresser token details requestId =
 verificationEmailContent :: Text -> Details -> Int -> Text
 verificationEmailContent token d requestId =
   let params = "?request_id=" <> tShow requestId <> "&secure_token=" <> token
-      link = "https://raise-newstart.com/fraudstop/confirm" <> params
+      link = "https://raise-newstart.com/fraudstop/verify" <> params
    in "Dear " <> firstName d <> ",<br><br>Your FraudStop appeal request has been received.<br><br><a href=\"" <> link <>
       "\">Please click here to verify your email address so that your request can be processed.</a><br><br>You will receive a confirmation email when processing is complete. If you do not receive a confirmation email within 24 hours, please call us on (02) 9211 4400.<br><br>You may also receive BCC copies of several other emails, if you chose those options.  These are for your reference only; you do not need to do anything further with them.<br><br>Thank you for using FraudStop."
 
