@@ -30,12 +30,13 @@ import Data.List.NonEmpty (fromList)
 import Data.Maybe (fromMaybe)
 import Data.MonoTraversable (replaceElemStrictText)
 import Data.String (IsString)
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text, pack)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
 import Database.PostgreSQL.Simple (Only(Only), Query, connectPostgreSQL, query)
 import Database.PostgreSQL.Simple.FromField (FromField, fromField, fromJSONField)
-import Debug.Trace (trace)
+
+-- import Debug.Trace (trace)
 import GHC.Generics (Generic)
 import Network.AWS.Lambda.Invoke (invoke, irsPayload)
 import Network.HTTP.Client (HttpException, Response)
@@ -119,14 +120,15 @@ instance Exception CustomException
 handler :: APIGatewayProxyRequest Text -> IO (APIGatewayProxyResponse Text)
 handler request = do
   sendGridApiKey <- fromEnvRequired "FRAUDSTOP_SENDGRID_API_KEY"
-  authEmail <- fromEnvRequired "DOCSAWAY_EMAIL"
-  key <- fromEnvRequired "DOCSAWAY_KEY"
+  docsEmail <- fromEnvRequired "DOCSAWAY_EMAIL"
+  docsKey <- fromEnvRequired "DOCSAWAY_KEY"
+  lambdaName <- fromEnvOptional "LETTER_LAMBDA" "fraudstop-dev-letter-func"
   stage <- fromEnvOptional "STAGE" "DEV"
   salt <- fromEnvOptional "SALT" "abcdefg"
   url <- dbUrl
   conn <- connectPostgreSQL url
     -- print request
-  let securer = secureToken $ pack salt
+  let securer = secureToken salt
   let mailer = mailSender sendGridApiKey stage
   let addresser = mailAddresser stage
   let urlPath = BSI.unpackChars $ request ^. agprqPath
@@ -152,11 +154,11 @@ handler request = do
           case maybeDetails of
             Just details ->
               if securer requestId' == token verification
-                then (do rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ dbEncode details
+                then (do rsp <- invokeLambda NorthVirginia lambdaName $ dbEncode details
                          let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
                          case letter of
                            Just pdf -> do
-                             result <- sendLetter authEmail key stage (body pdf)
+                             result <- sendLetter docsEmail docsKey stage (body pdf)
                              print result
                              foiStatus <- mailer $ foiEmail addresser details
                              print foiStatus
@@ -171,7 +173,7 @@ handler request = do
 secureToken :: Text -> Int -> Text
 secureToken salt requestId = tShow $ hashWith SHA256 $ encodeUtf8 $ salt <> tShow requestId
 
-mailSender :: (ToJSON a, ToJSON b) => Text -> String -> Mail a b -> IO (Either HttpException (Response BSLI.ByteString))
+mailSender :: (ToJSON a, ToJSON b) => Text -> Text -> Mail a b -> IO (Either HttpException (Response BSLI.ByteString))
 mailSender key stage mail = SG.sendMail (ApiKey key) mail {SG._mailMailSettings = sandboxMode stage}
 
 mailAddresser :: (Eq a, IsString a) => a -> Text -> Text -> SG.Personalization
@@ -231,7 +233,7 @@ foiEmailContent d =
       ".\n\nI look forward to receiving your acknowledgement of receipt of this request within 14 days, and your reply within 30 days.\n\nBest regards\n\n" <>
       senderName
 
-sandboxMode :: String -> Maybe MailSettings
+sandboxMode :: Text -> Maybe MailSettings
 sandboxMode stage =
   if stage == "TEST"
     then Just (MailSettings Nothing Nothing Nothing (Just (SandboxMode True)) Nothing)
@@ -255,15 +257,15 @@ invokeLambda region funcName payload = do
       Just output -> return output
       Nothing -> throw BadLambdaResponse
 
-sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3) => v1 -> v2 -> String -> v3 -> m Value
-sendLetter authEmail key stage letter =
+sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3) => v1 -> v2 -> Text -> v3 -> m Value
+sendLetter docsEmail docsKey stage letter =
   runReq defaultHttpConfig $ do
     let apiMode =
           if stage == "PROD"
             then "LIVE"
             else "TEST"
     let endpoint = https "www.docsaway.com" /: "app" /: "api" /: "rest" /: "mail.json"
-    let apiConnection = object ["email" .= authEmail, "key" .= key]
+    let apiConnection = object ["email" .= docsEmail, "key" .= docsKey]
     let printingStation =
           object ["id" .= ("AUTO" :: Text), "courierID" .= False, "ink" .= ("BW" :: Text), "paper" .= ("80" :: Text)]
     let recipient =
@@ -289,10 +291,10 @@ sendLetter authEmail key stage letter =
     r <- req POST endpoint (ReqBodyJson payload) jsonResponse mempty
     return (responseBody r :: Value)
 
-fromEnvOptional :: String -> String -> IO String
+fromEnvOptional :: String -> String -> IO Text
 fromEnvOptional var fallback = do
   envVar <- lookupEnv var
-  return $ fromMaybe fallback envVar
+  return $ pack $ fromMaybe fallback envVar
 
 fromEnvRequired :: String -> IO Text
 fromEnvRequired var = do
