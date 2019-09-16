@@ -6,7 +6,7 @@ import Database.PostgreSQL.Simple (Connection, Only(Only), Query, connectPostgre
 import System.Environment (lookupEnv)
 import Test.Hspec (before_, context, describe, hspec, it, shouldBe, xit)
 
-import Handler (handler, validateToken)
+import Handler (handler, secureToken)
 import qualified Mocks as Mock
 
 main :: IO ()
@@ -41,11 +41,11 @@ main = do
               [Only requestId] <-
                 query_ conn "select id from user_requests where processed_at is not null " :: IO [Only Int]
               requestId `shouldBe` 1
-      describe "#validateToken" $ do
+      describe "#secureToken" $ do
         let salt = "abcdefg"
-        let email = "tim+alicecitizen@getup.org.au"
+        let requestId = 1
         it "hashes the email address" $
-          validateToken salt email "c8d90843e135fbbf3fa67ff124624f31b9c071e99af5113476d04db9d1fa6e69" `shouldBe` True
+          secureToken salt requestId `shouldBe` "ec5acefa44cf8383f4ebaff94b6bfa200a9fdbe92aaf11481907c040c4a11b54"
 
 setupConfirm :: Connection -> IO ()
 setupConfirm conn = do
@@ -72,10 +72,10 @@ insertTestDetails = "insert into user_requests(created_at, details) values(now()
 
 details :: Text
 details =
-  "{\"firstName\":\"alice\",\"lastName\":\"citizen\",\"email\":\"tim+alicecitizen@getup.org.au\",\"address\":\"7 henry dr\",\"suburb\":\"picnic point\",\"postcode\":\"2341\",\"dob\":\"01/01/1900\",\"phone\":\"0123456789\",\"crn\":\"123456789x\",\"debtReason\":\"Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\",\"emailMP\":true,\"emailMinister\":true,\"submitFoi\":true,\"personalCircumstances\":[\"Addiction\",\"sfdg sdfgsdfg dsfg\"]}"
+  "{\"firstName\":\"alice\",\"lastName\":\"citizen\",\"email\":\"tim+alicecitizen@mcewan.it\",\"address\":\"7 henry dr\",\"suburb\":\"picnic point\",\"postcode\":\"2341\",\"dob\":\"01/01/1900\",\"phone\":\"0123456789\",\"crn\":\"123456789x\",\"debtReason\":\"Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\",\"emailMP\":true,\"emailMinister\":true,\"submitFoi\":true,\"personalCircumstances\":[\"Addiction\",\"sfdg sdfgsdfg dsfg\"]}"
 
 validConfirmation :: Text
-validConfirmation = "{\"requestId\":1,\"token\":\"26c02e707d870606b9a317f9d5162e198148c64a25a5a6fc9bf63a9b4a73d111\"}"
+validConfirmation = "{\"requestId\":1,\"token\":\"ec5acefa44cf8383f4ebaff94b6bfa200a9fdbe92aaf11481907c040c4a11b54\"}"
 
 invalidConfirmation :: Text
 invalidConfirmation = "{\"requestId\":1,\"token\":\"xxx\"}"

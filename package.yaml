@@ -33,6 +33,7 @@ dependencies:
 - sendgrid-v3
 - mono-traversable
 - cryptonite
+- http-client
 
 default-extensions:
 - ApplicativeDo

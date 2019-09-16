@@ -25,9 +25,11 @@ import Crypto.Hash (SHA256(SHA256), hashWith)
 import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, encode, genericToEncoding, object, toEncoding)
 import qualified Data.ByteString.Internal as BSI
 import Data.ByteString.Lazy (fromStrict, toStrict)
+import qualified Data.ByteString.Lazy.Internal as BSLI
 import Data.List.NonEmpty (fromList)
 import Data.Maybe (fromMaybe)
 import Data.MonoTraversable (replaceElemStrictText)
+import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
@@ -36,6 +38,7 @@ import Database.PostgreSQL.Simple.FromField (FromField, fromField, fromJSONField
 import Debug.Trace (trace)
 import GHC.Generics (Generic)
 import Network.AWS.Lambda.Invoke (invoke, irsPayload)
+import Network.HTTP.Client (HttpException, Response)
 import Network.HTTP.Req
   ( POST(POST)
   , ReqBodyJson(ReqBodyJson)
@@ -119,10 +122,13 @@ handler request = do
   authEmail <- fromEnvRequired "DOCSAWAY_EMAIL"
   key <- fromEnvRequired "DOCSAWAY_KEY"
   stage <- fromEnvOptional "STAGE" "DEV"
-  salt <- fromEnvOptional "SALT" ""
+  salt <- fromEnvOptional "SALT" "abcdefg"
   url <- dbUrl
   conn <- connectPostgreSQL url
-  -- print request
+    -- print request
+  let securer = secureToken $ pack salt
+  let mailer = mailSender sendGridApiKey stage
+  let addresser = mailAddresser stage
   let urlPath = BSI.unpackChars $ request ^. agprqPath
   case urlPath of
     "/begin" -> do
@@ -130,9 +136,10 @@ handler request = do
       case maybeDetails of
         Just details -> do
           [Only requestId] <- query conn insertDetails [encode details]
-          let envelope = confirmationEmail stage (pack salt) details requestId
-          print envelope
-          status <- SG.sendMail (ApiKey sendGridApiKey) envelope {SG._mailMailSettings = sandboxMode stage}
+          let token = securer requestId
+          let confirmationMail = confirmationEmail addresser token details requestId
+          print confirmationMail
+          status <- mailer confirmationMail
           print status
           pure responseOk
         Nothing -> pure $ response 400
@@ -140,31 +147,46 @@ handler request = do
       let maybeConfirmation = request ^. requestBody >>= confirmationDecoder
       case maybeConfirmation of
         Just confirmation -> do
-          [Only (maybeDetails :: Maybe Details)] <- query conn maybeAcquireDetails [requestId confirmation]
+          let requestId' = requestId confirmation
+          [Only (maybeDetails :: Maybe Details)] <- query conn maybeAcquireDetails [requestId']
           case maybeDetails of
-            Just details -> do
-              let validToken = validateToken (pack salt) (email details) (token confirmation)
-              print validToken
-              if validToken
+            Just details ->
+              if securer requestId' == token confirmation
                 then (do rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ dbEncode details
                          let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
                          case letter of
                            Just pdf -> do
                              result <- sendLetter authEmail key stage (body pdf)
                              print result
+                             foiStatus <- mailer $ foiEmail addresser details
+                             print foiStatus
                              pure responseOk
                            _ -> throw BadLetter)
                 else pure $ response 403
-              -- pure $ response 403
+                -- pure $ response 403
             Nothing -> pure $ response 403
         Nothing -> pure $ response 403
     _ -> pure $ response 404
 
-validateToken :: Text -> Text -> Text -> Bool
-validateToken salt email token =
-  let realToken = tShow $ hashWith SHA256 $ encodeUtf8 $ email <> salt
-   in realToken == token
+secureToken :: Text -> Int -> Text
+secureToken salt requestId = tShow $ hashWith SHA256 $ encodeUtf8 $ salt <> tShow requestId
 
+mailSender :: (ToJSON a, ToJSON b) => Text -> String -> Mail a b -> IO (Either HttpException (Response BSLI.ByteString))
+mailSender key stage mail = SG.sendMail (ApiKey key) mail {SG._mailMailSettings = sandboxMode stage}
+
+mailAddresser :: (Eq a, IsString a) => a -> Text -> Text -> SG.Personalization
+mailAddresser stage email' name =
+  let to =
+        if stage == "PROD"
+          then email'
+          else "tech+" <> replaceElemStrictText '@' '_' email' <> "@getup.org.au"
+   in SG.personalization $ fromList [MailAddress to name]
+
+-- validateToken :: Text -> Text -> Text -> Bool
+-- validateToken salt email token =
+--   let realToken =
+--    in realToken == token
+--   --  in trace (unpack salt) $ trace (unpack email) $ trace (unpack realToken) $ trace (unpack token) $ realToken == token
 insertDetails :: Query
 insertDetails = "insert into user_requests(created_at, details) values(now(), ?) returning id"
 
@@ -172,27 +194,42 @@ maybeAcquireDetails :: Query
 maybeAcquireDetails =
   "update user_requests set locked_at = now() where processed_at is null and locked_at is null and id = ? returning details"
 
-confirmationEmail :: String -> Text -> Details -> Int -> Mail () ()
-confirmationEmail stage salt details requestId =
-  let sanitisedAddress = replaceElemStrictText '@' '_' $ email details
-      emailAddress =
-        if stage == "PROD"
-          then email details
-          else "tech+" <> sanitisedAddress <> "@getup.org.au"
-      recipient = MailAddress emailAddress (firstName details <> lastName details)
-      to = SG.personalization $ fromList [recipient]
+confirmationEmail :: (Text -> Text -> SG.Personalization) -> Text -> Details -> Int -> Mail () ()
+confirmationEmail addresser token details requestId =
+  let to = addresser (email details) (firstName details <> " " <> lastName details)
       from = MailAddress "info+fraudstop@getup.org.au" "GetUp"
       subject = "Please confirm your email address"
-      content = Just $ fromList [SG.mailContentHtml $ confirmationEmailContent salt details requestId]
+      content = Just $ fromList [SG.mailContentHtml $ confirmationEmailContent token details requestId]
    in SG.mail [to] from subject content
 
 confirmationEmailContent :: Text -> Details -> Int -> Text
-confirmationEmailContent salt d requestId =
-  let secureToken = tShow $ hashWith SHA256 $ encodeUtf8 $ email d <> salt
-      params = "?request_id=" <> tShow requestId <> "&secure_token=" <> secureToken
+confirmationEmailContent token d requestId =
+  let params = "?request_id=" <> tShow requestId <> "&secure_token=" <> token
       link = "https://raise-newstart.com/fraudstop/confirm" <> params
    in "Dear " <> firstName d <> ",<br><br>Your FraudStop appeal request has been received.<br><br><a href=\"" <> link <>
       "\">Please confirm your email so that your request can be processed.</a><br><br>You will receive a confirmation email when processing is complete. If you do not receive a confirmation email within 24 hours, please call us on (02) 9211 4400.<br><br>You may also receive BCC copies of several other emails, if you chose those options.  These are for your reference only; you do not need to do anything further with them.<br><br>Thank you for using FraudStop."
+
+foiEmail :: (Text -> Text -> SG.Personalization) -> Details -> Mail () ()
+foiEmail addresser details =
+  let to = addresser "freedomofinformation@humanservices.gov.au" "Dept. of Human Services"
+      from = MailAddress (email details) (firstName details <> " " <> lastName details)
+      subject = "FOI request for Centrelink file"
+      content = Just $ fromList [SG.mailContentText $ foiEmailContent details]
+   in SG.mail [to] from subject content
+
+foiEmailContent :: Details -> Text
+foiEmailContent d =
+  let senderName = firstName d <> " " <> lastName d
+   in "Dear Department of Human Services,\n\nI am writing to request under the Freedom of Information Act 1982 copies of all Centrelink file papers, computer records and/or printouts concerning me, " <>
+      senderName <>
+      " (date of birth: " <>
+      dob d <>
+      ", Centrelink CRN: " <>
+      crn d <>
+      ").\n\nPlease include all Centrelink files (including any debt files), as well as all file papers, computer records and/or printouts concerning me from the Customer Archive Retrieval System, batch storage, and any relevant captures of Centrelink computer screens concerning me.\n\nI request that, wherever technically possible, you provide these records in their original accessible electronic form, rather than images of the documents such as scans or screenshots.\n\nPlease provide copies of these records by email to " <>
+      email d <>
+      ".\n\nI look forward to receiving your acknowledgement of receipt of this request within 14 days, and your reply within 30 days.\n\nBest regards\n\n" <>
+      senderName
 
 sandboxMode :: String -> Maybe MailSettings
 sandboxMode stage =
