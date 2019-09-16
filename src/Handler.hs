@@ -8,6 +8,7 @@ import AWSLambda.Events.APIGateway
   )
 import Control.Exception (Exception, throw)
 import Control.Lens ((<&>), (^.), set)
+import qualified Control.Monad as CM
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.AWS
   ( Credentials(Discover)
@@ -162,8 +163,14 @@ handler request = do
                              print result
                              confirmationStatus <- mailer $ confirmationEmail addresser details (body pdf)
                              print confirmationStatus
-                             foiStatus <- mailer $ foiEmail addresser details
-                             print foiStatus
+                             CM.when
+                               (submitFoi details)
+                               (do foiStatus <- mailer $ foiEmail addresser details
+                                   print foiStatus)
+                             CM.when
+                               (emailMinister details)
+                               (do ministerStatus <- mailer $ ministerEmail addresser details
+                                   print ministerStatus)
                              pure responseOk
                            _ -> throw BadLetter)
                 else pure $ response 403
@@ -258,6 +265,24 @@ foiEmailContent d =
       ").\n\nPlease include all Centrelink files (including any debt files), as well as all file papers, computer records and/or printouts concerning me from the Customer Archive Retrieval System, batch storage, and any relevant captures of Centrelink computer screens concerning me.\n\nI request that, wherever technically possible, you provide these records in their original accessible electronic form, rather than images of the documents such as scans or screenshots.\n\nPlease provide copies of these records by email to " <>
       email d <>
       ".\n\nI look forward to receiving your acknowledgement of receipt of this request within 14 days, and your reply within 30 days.\n\nBest regards\n\n" <>
+      senderName
+
+ministerEmail :: (Text -> Text -> SG.Personalization) -> Details -> Mail () ()
+ministerEmail addresser details =
+  let to = addresser "minister@humanservices.gov.au" "Minister for Government Services"
+      from = MailAddress (email details) (firstName details <> " " <> lastName details)
+      subject = "Centrelink debt claim complaint"
+      content = Just $ fromList [SG.mailContentText $ ministerEmailContent details]
+   in SG.mail [to] from subject content
+
+ministerEmailContent :: Details -> Text
+ministerEmailContent d =
+  let senderName = firstName d <> " " <> lastName d
+   in "Dear Minister\n\nI am writing to you to complain. I have received a letter from Centrelink claiming that I have incorrectly reported my income.\n\nI believe that the letter of demand has been sent unfairly and has caused me to feel anxious and stressed.\n\nI request that you direct your staff or departmental officers to investigate how the debt claim against me was raised.\n\nFurthermore, I believe the current policy of automatically issued debt claims is grossly unfair and I request that you cease it immediately.\n\nI can be contacted on " <>
+      email d <>
+      " or " <>
+      phone d <>
+      ". Please either reply to this complaint or direct your staff or departmental officers to do so.\n\nBest regards\n\n" <>
       senderName
 
 sandboxMode :: Text -> Maybe MailSettings
