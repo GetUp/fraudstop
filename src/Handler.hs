@@ -179,7 +179,7 @@ mailAddresser stage email' name =
   let to =
         if stage == "PROD"
           then email'
-          else "tech+" <> replaceElemStrictText '@' '_' email' <> "@getup.org.au"
+          else "tim+" <> replaceElemStrictText '@' '_' email' <> "@getup.org.au"
    in SG.personalization $ fromList [MailAddress to name]
 
 -- validateToken :: Text -> Text -> Text -> Bool
