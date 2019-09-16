@@ -28,11 +28,12 @@ import Data.ByteString.Lazy (fromStrict, toStrict)
 import Data.List.NonEmpty (fromList)
 import Data.Maybe (fromMaybe)
 import Data.MonoTraversable (replaceElemStrictText)
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
 import Database.PostgreSQL.Simple (Only(Only), Query, connectPostgreSQL, query)
 import Database.PostgreSQL.Simple.FromField (FromField, fromField, fromJSONField)
+import Debug.Trace (trace)
 import GHC.Generics (Generic)
 import Network.AWS.Lambda.Invoke (invoke, irsPayload)
 import Network.HTTP.Req
@@ -70,6 +71,9 @@ data Details =
     , crn :: Text
     , debtReason :: Text
     , personalCircumstances :: [Text]
+    , emailMP :: Bool
+    , emailMinister :: Bool
+    , submitFoi :: Bool
     }
   deriving (Show, Typeable, Generic)
 
@@ -115,6 +119,7 @@ handler request = do
   authEmail <- fromEnvRequired "DOCSAWAY_EMAIL"
   key <- fromEnvRequired "DOCSAWAY_KEY"
   stage <- fromEnvOptional "STAGE" "DEV"
+  salt <- fromEnvOptional "SALT" ""
   url <- dbUrl
   conn <- connectPostgreSQL url
   -- print request
@@ -125,7 +130,6 @@ handler request = do
       case maybeDetails of
         Just details -> do
           [Only requestId] <- query conn insertDetails [encode details]
-          salt <- fromEnvOptional "SALT" ""
           let envelope = confirmationEmail stage (pack salt) details requestId
           print envelope
           status <- SG.sendMail (ApiKey sendGridApiKey) envelope {SG._mailMailSettings = sandboxMode stage}
@@ -134,24 +138,32 @@ handler request = do
         Nothing -> pure $ response 400
     "/confirm" -> do
       let maybeConfirmation = request ^. requestBody >>= confirmationDecoder
-      -- TODO validate token
       case maybeConfirmation of
         Just confirmation -> do
           [Only (maybeDetails :: Maybe Details)] <- query conn maybeAcquireDetails [requestId confirmation]
           case maybeDetails of
             Just details -> do
-              rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ dbEncode details
-              let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
-              case letter of
-                Just pdf -> do
-                  result <- sendLetter authEmail key stage (body pdf)
-                  print result
-                  pure responseOk
-                _ -> throw BadLetter
-              pure $ response 403
+              let validToken = validateToken (pack salt) (email details) (token confirmation)
+              print validToken
+              if validToken
+                then (do rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ dbEncode details
+                         let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
+                         case letter of
+                           Just pdf -> do
+                             result <- sendLetter authEmail key stage (body pdf)
+                             print result
+                             pure responseOk
+                           _ -> throw BadLetter)
+                else pure $ response 403
+              -- pure $ response 403
             Nothing -> pure $ response 403
         Nothing -> pure $ response 403
     _ -> pure $ response 404
+
+validateToken :: Text -> Text -> Text -> Bool
+validateToken salt email token =
+  let realToken = tShow $ hashWith SHA256 $ encodeUtf8 $ email <> salt
+   in realToken == token
 
 insertDetails :: Query
 insertDetails = "insert into user_requests(created_at, details) values(now(), ?) returning id"
