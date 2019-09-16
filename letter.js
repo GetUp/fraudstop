@@ -7,10 +7,9 @@ const moment = require('moment')
 exports.handler = async (event) => {
   console.log({ event })
   const filename = await createLetter(event)
-  const letter = encode64(filename)
   return {
     statusCode: 200,
-    body: JSON.stringify(letter),
+    body: encode64(filename),
   }
 }
 
