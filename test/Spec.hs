@@ -16,7 +16,7 @@ main = do
   hspec $
     before_ (setupDb conn) $ do
       describe "/begin" $
-        xit "persists the details and sends a confirmation email" $ do
+        xit "persists the details and sends a verification email" $ do
           reqResponse <- handler $ Mock.request "/begin" [] details
           reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
           [Only requestsCount] <-
@@ -29,12 +29,12 @@ main = do
       describe "/confirm" $
         before_ (setupConfirm conn) $ do
           context "with an invalid token" $ do
-            let body = invalidConfirmation
+            let body = invalidVerification
             it "refuses to do anything" $ do
               reqResponse <- handler $ Mock.request "/confirm" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 403 [] Nothing
           context "with a valid token" $ do
-            let body = validConfirmation
+            let body = validVerification
             it "processes the request" $ do
               reqResponse <- handler $ Mock.request "/confirm" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
@@ -74,8 +74,8 @@ details :: Text
 details =
   "{\"firstName\":\"alice\",\"lastName\":\"citizen\",\"email\":\"tim+alicecitizen@mcewan.it\",\"address\":\"7 henry dr\",\"suburb\":\"picnic point\",\"postcode\":\"2341\",\"dob\":\"01/01/1900\",\"phone\":\"0123456789\",\"crn\":\"123456789x\",\"debtReason\":\"Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\",\"emailMP\":true,\"emailMinister\":true,\"submitFoi\":true,\"personalCircumstances\":[\"Addiction\",\"sfdg sdfgsdfg dsfg\"]}"
 
-validConfirmation :: Text
-validConfirmation = "{\"requestId\":1,\"token\":\"ec5acefa44cf8383f4ebaff94b6bfa200a9fdbe92aaf11481907c040c4a11b54\"}"
+validVerification :: Text
+validVerification = "{\"requestId\":1,\"token\":\"ec5acefa44cf8383f4ebaff94b6bfa200a9fdbe92aaf11481907c040c4a11b54\"}"
 
-invalidConfirmation :: Text
-invalidConfirmation = "{\"requestId\":1,\"token\":\"xxx\"}"
+invalidVerification :: Text
+invalidVerification = "{\"requestId\":1,\"token\":\"xxx\"}"

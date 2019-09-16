@@ -94,20 +94,20 @@ detailDecoder = decode . fromStrict . encodeUtf8
 dbEncode :: Details -> BSI.ByteString
 dbEncode = toStrict . encode
 
-data Confirmation =
-  Confirmation
+data Verification =
+  Verification
     { requestId :: Int
     , token :: Text
     }
   deriving (Show, Typeable, Generic)
 
-instance ToJSON Confirmation where
+instance ToJSON Verification where
   toEncoding = genericToEncoding defaultOptions
 
-instance FromJSON Confirmation
+instance FromJSON Verification
 
-confirmationDecoder :: Text -> Maybe Confirmation
-confirmationDecoder = decode . fromStrict . encodeUtf8
+verificationDecoder :: Text -> Maybe Verification
+verificationDecoder = decode . fromStrict . encodeUtf8
 
 data CustomException
   = BadLambdaResponse
@@ -137,21 +137,21 @@ handler request = do
         Just details -> do
           [Only requestId] <- query conn insertDetails [encode details]
           let token = securer requestId
-          let confirmationMail = confirmationEmail addresser token details requestId
-          print confirmationMail
-          status <- mailer confirmationMail
+          let verificationMail = verificationEmail addresser token details requestId
+          print verificationMail
+          status <- mailer verificationMail
           print status
           pure responseOk
         Nothing -> pure $ response 400
     "/confirm" -> do
-      let maybeConfirmation = request ^. requestBody >>= confirmationDecoder
-      case maybeConfirmation of
-        Just confirmation -> do
-          let requestId' = requestId confirmation
+      let maybeVerification = request ^. requestBody >>= verificationDecoder
+      case maybeVerification of
+        Just verification -> do
+          let requestId' = requestId verification
           [Only (maybeDetails :: Maybe Details)] <- query conn maybeAcquireDetails [requestId']
           case maybeDetails of
             Just details ->
-              if securer requestId' == token confirmation
+              if securer requestId' == token verification
                 then (do rsp <- invokeLambda NorthVirginia "fraudstop-dev-letter-func" $ dbEncode details
                          let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
                          case letter of
@@ -194,20 +194,20 @@ maybeAcquireDetails :: Query
 maybeAcquireDetails =
   "update user_requests set locked_at = now() where processed_at is null and locked_at is null and id = ? returning details"
 
-confirmationEmail :: (Text -> Text -> SG.Personalization) -> Text -> Details -> Int -> Mail () ()
-confirmationEmail addresser token details requestId =
+verificationEmail :: (Text -> Text -> SG.Personalization) -> Text -> Details -> Int -> Mail () ()
+verificationEmail addresser token details requestId =
   let to = addresser (email details) (firstName details <> " " <> lastName details)
       from = MailAddress "info+fraudstop@getup.org.au" "GetUp"
-      subject = "Please confirm your email address"
-      content = Just $ fromList [SG.mailContentHtml $ confirmationEmailContent token details requestId]
+      subject = "Please verify your email address"
+      content = Just $ fromList [SG.mailContentHtml $ verificationEmailContent token details requestId]
    in SG.mail [to] from subject content
 
-confirmationEmailContent :: Text -> Details -> Int -> Text
-confirmationEmailContent token d requestId =
+verificationEmailContent :: Text -> Details -> Int -> Text
+verificationEmailContent token d requestId =
   let params = "?request_id=" <> tShow requestId <> "&secure_token=" <> token
       link = "https://raise-newstart.com/fraudstop/confirm" <> params
    in "Dear " <> firstName d <> ",<br><br>Your FraudStop appeal request has been received.<br><br><a href=\"" <> link <>
-      "\">Please confirm your email so that your request can be processed.</a><br><br>You will receive a confirmation email when processing is complete. If you do not receive a confirmation email within 24 hours, please call us on (02) 9211 4400.<br><br>You may also receive BCC copies of several other emails, if you chose those options.  These are for your reference only; you do not need to do anything further with them.<br><br>Thank you for using FraudStop."
+      "\">Please click here to verify your email address so that your request can be processed.</a><br><br>You will receive a confirmation email when processing is complete. If you do not receive a confirmation email within 24 hours, please call us on (02) 9211 4400.<br><br>You may also receive BCC copies of several other emails, if you chose those options.  These are for your reference only; you do not need to do anything further with them.<br><br>Thank you for using FraudStop."
 
 foiEmail :: (Text -> Text -> SG.Personalization) -> Details -> Mail () ()
 foiEmail addresser details =
