@@ -141,7 +141,7 @@ handler request = do
         Just details -> do
           [Only requestId] <- query conn insertDetails [encode details]
           let token = securer requestId
-          status <- mailer verificationEmail addresser token details requestId
+          status <- mailer $ verificationEmail addresser token details requestId
           print status
           pure responseOk
         Nothing -> pure $ response 400

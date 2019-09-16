@@ -31,12 +31,12 @@ main = do
           context "with an invalid token" $ do
             let body = invalidVerification
             it "refuses to do anything" $ do
-              reqResponse <- handler $ Mock.request "/confirm" [] body
+              reqResponse <- handler $ Mock.request "/verify" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 403 [] Nothing
           context "with a valid token" $ do
             let body = validVerification
             it "processes the request" $ do
-              reqResponse <- handler $ Mock.request "/confirm" [] body
+              reqResponse <- handler $ Mock.request "/verify" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
               [Only requestId] <-
                 query_ conn "select id from user_requests where processed_at is not null " :: IO [Only Int]
