@@ -227,7 +227,7 @@ confirmationEmail addresser details letter =
       from = MailAddress "info+fraudstop@getup.org.au" "GetUp"
       subject = "Request processed confirmation"
       content = Just $ fromList [SG.mailContentText $ confirmationEmailContent fName]
-      attachment = createAttachment $ pack letter
+      attachment = confirmationAttachment $ pack letter
    in (SG.mail [to] from subject content) {SG._mailAttachments = Just [attachment]}
 
 confirmationEmailContent :: Text -> Text
@@ -235,8 +235,8 @@ confirmationEmailContent name =
   "Dear " <> name <>
   ", your request has been processed.  A review letter has been sent to Centrelink on your behalf. A digital copy of the letter has been attached for your reference.\n\nPS You may also receive BCC copies of several other emails, if you chose those options.  These are for your reference only; you do not need to do anything further with them."
 
-createAttachment :: Text -> MailAttachment
-createAttachment pdf =
+confirmationAttachment :: Text -> MailAttachment
+confirmationAttachment pdf =
   MailAttachment
     { SG._mailAttachmentContent = pdf
     , SG._mailAttachmentType = Just "application/pdf"
@@ -247,8 +247,10 @@ createAttachment pdf =
 
 foiEmail :: (Text -> Text -> SG.Personalization) -> Details -> Mail () ()
 foiEmail addresser details =
-  let to = addresser "freedomofinformation@humanservices.gov.au" "Dept. of Human Services"
-      from = MailAddress (email details) (firstName details <> " " <> lastName details)
+  let from = MailAddress (email details) (firstName details <> " " <> lastName details)
+      to =
+        (addresser "freedomofinformation@humanservices.gov.au" "Dept. of Human Services")
+          {SG._personalizationBcc = Just [from]}
       subject = "FOI request for Centrelink file"
       content = Just $ fromList [SG.mailContentText $ foiEmailContent details]
    in SG.mail [to] from subject content
@@ -269,8 +271,10 @@ foiEmailContent d =
 
 ministerEmail :: (Text -> Text -> SG.Personalization) -> Details -> Mail () ()
 ministerEmail addresser details =
-  let to = addresser "minister@humanservices.gov.au" "Minister for Government Services"
-      from = MailAddress (email details) (firstName details <> " " <> lastName details)
+  let from = MailAddress (email details) (firstName details <> " " <> lastName details)
+      to =
+        (addresser "minister@humanservices.gov.au" "Minister for Government Services")
+          {SG._personalizationBcc = Just [from]}
       subject = "Centrelink debt claim complaint"
       content = Just $ fromList [SG.mailContentText $ ministerEmailContent details]
    in SG.mail [to] from subject content
