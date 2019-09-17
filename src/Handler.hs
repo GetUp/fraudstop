@@ -289,6 +289,28 @@ ministerEmailContent d =
       ". Please either reply to this complaint or direct your staff or departmental officers to do so.\n\nBest regards\n\n" <>
       senderName
 
+mpEmail :: (Text -> Text -> SG.Personalization) -> Text -> Details -> Mail () ()
+mpEmail addresser mpName details =
+  let from = MailAddress (email details) (firstName details <> " " <> lastName details)
+      to = (addresser "" "") {SG._personalizationBcc = Just [from]}
+      subject = "Centrelink debt claim complaint"
+      content = Just $ fromList [SG.mailContentText $ mpEmailContent mpName details]
+   in SG.mail [to] from subject content
+
+mpEmailContent :: Text -> Details -> Text
+mpEmailContent recipientName d =
+  let senderName = firstName d <> " " <> lastName d
+      fullAddress = address d <> ", " <> suburb d <> " " <> postcode d
+   in "Dear " <> recipientName <> ",\n\nI am a local constituent (address: " <> fullAddress <>
+      ") writing to seek your urgent assistance with a Centrelink matter. \n\nLike many other people, I have recently received an automated letter from Centrelink asserting that I was overpaid in the past and now owe money. \n\nI am aware of the enormous number of mistakes being made in these letters, and I am seriously concerned my debt has been calculated incorrectly. \n\nI have submitted an application for review by a Centrelink Authorised Review Officer – but I am concerned about the reliability of the appeals process. Given the financial pressure placed on me by Centrelink’s potentially erroneous debt claim, I would appreciate your assistance in working with Centrelink staff and navigating the process to resolve this matter quickly. \n\nThank you very much for your help and support. I would appreciate it if you or your staff could contact me on " <>
+      email d <>
+      " or " <>
+      phone d <>
+      " at the first available opportunity to discuss my case. For reference, my Centrelink CRN is " <>
+      crn d <>
+      ".\n\nBest regards\n\n" <>
+      senderName
+
 sandboxMode :: Text -> Maybe MailSettings
 sandboxMode stage =
   if stage == "TEST"
