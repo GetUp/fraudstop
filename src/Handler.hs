@@ -123,7 +123,7 @@ instance Exception CustomException
 
 handler :: APIGatewayProxyRequest Text -> IO (APIGatewayProxyResponse Text)
 handler request = do
-  sendGridApiKey <- fromEnvRequired "FRAUDSTOP_SENDGRID_API_KEY"
+  sendGridApiKey <- fromEnvRequired "SENDGRID_API_KEY"
   docsEmail <- fromEnvRequired "DOCSAWAY_EMAIL"
   docsKey <- fromEnvRequired "DOCSAWAY_KEY"
   lambdaName <- fromEnvOptional "LETTER_LAMBDA" "fraudstop-dev-letter-func"

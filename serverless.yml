@@ -3,10 +3,16 @@ service: fraudstop
 provider:
   name: aws
   iamRoleStatements:
-  - Effect: Allow
-    Action:
-      - lambda:InvokeFunction
-    Resource: "*"
+    - Effect: Allow
+      Action:
+        - lambda:InvokeFunction
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - logs:CreateLogGroup
+        - logs:CreateLogStream
+        - logs:PutLogEvents
+      Resource: "*"
 
 functions:
   fraudstop-func:
@@ -17,8 +23,12 @@ functions:
           integration: lambda-proxy
           path: /{x}
           method: POST
+          cors: true
     environment:
       DATABASE_URL: ${env:DATABASE_URL}
+      SENDGRID_API_KEY: ${env:SENDGRID_API_KEY}
+      DOCSAWAY_EMAIL: ${env:DOCSAWAY_EMAIL}
+      DOCSAWAY_KEY: ${env:DOCSAWAY_KEY}
 
   letter-func:
     runtime: nodejs10.x
