@@ -4,7 +4,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Database.PostgreSQL.Simple (Connection, Only(Only), Query, connectPostgreSQL, execute, execute_, query_)
 import System.Environment (lookupEnv)
-import Test.Hspec (before_, context, describe, hspec, it, shouldBe, xit)
+import Test.Hspec (before_, context, describe, hspec, it, shouldBe)
 
 import Handler (handler, secureToken)
 import qualified Mocks as Mock
@@ -16,7 +16,7 @@ main = do
   hspec $
     before_ (setupDb conn) $ do
       describe "/begin" $
-        xit "persists the details and sends a verification email" $ do
+        it "persists the details and sends a verification email" $ do
           reqResponse <- handler $ Mock.request "/begin" [] details
           reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
           [Only requestsCount] <-
@@ -39,7 +39,7 @@ main = do
               reqResponse <- handler $ Mock.request "/verify" [] body
               reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
               [Only requestId] <-
-                query_ conn "select id from user_requests where processed_at is not null " :: IO [Only Int]
+                query_ conn "select id from user_requests where processed_at is not null" :: IO [Only Int]
               requestId `shouldBe` 1
       describe "#secureToken" $ do
         let salt = "abcdefg"

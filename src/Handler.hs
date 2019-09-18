@@ -171,10 +171,14 @@ handler request = do
                                (emailMinister details)
                                (do ministerStatus <- mailer $ ministerEmail addresser details
                                    print ministerStatus)
+                             CM.when
+                               (emailMP details)
+                               (do mps <- query conn selectMPs [postcode details]
+                                   mpStatuses <- CM.forM mps $ \mp -> mailer $ mpEmail addresser details mp
+                                   mapM_ print mpStatuses)
                              pure responseOk
                            _ -> throw BadLetter)
                 else pure $ response 403
-                -- pure $ response 403
             Nothing -> pure $ response 403
         Nothing -> pure $ response 403
     _ -> pure $ response 404
@@ -204,6 +208,9 @@ insertDetails = "insert into user_requests(created_at, details) values(now(), ?)
 maybeAcquireDetails :: Query
 maybeAcquireDetails =
   "update user_requests set locked_at = now() where processed_at is null and locked_at is null and id = ? returning details"
+
+selectMPs :: Query
+selectMPs = "select first_name, last_name, email from mps where ? = any(postcodes)"
 
 verificationEmail :: (Text -> Text -> SG.Personalization) -> Text -> Details -> Int -> Mail () ()
 verificationEmail addresser token details requestId =
@@ -289,10 +296,11 @@ ministerEmailContent d =
       ". Please either reply to this complaint or direct your staff or departmental officers to do so.\n\nBest regards\n\n" <>
       senderName
 
-mpEmail :: (Text -> Text -> SG.Personalization) -> Text -> Details -> Mail () ()
-mpEmail addresser mpName details =
-  let from = MailAddress (email details) (firstName details <> " " <> lastName details)
-      to = (addresser "" "") {SG._personalizationBcc = Just [from]}
+mpEmail :: (Text -> Text -> SG.Personalization) -> Details -> (Text, Text, Text) -> Mail () ()
+mpEmail addresser details (mpFirstName, mpLastName, mpEmailAddress) =
+  let mpName = mpFirstName <> " " <> mpLastName
+      from = MailAddress (email details) (firstName details <> " " <> lastName details)
+      to = (addresser mpEmailAddress mpName) {SG._personalizationBcc = Just [from]}
       subject = "Centrelink debt claim complaint"
       content = Just $ fromList [SG.mailContentText $ mpEmailContent mpName details]
    in SG.mail [to] from subject content
