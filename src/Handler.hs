@@ -53,6 +53,7 @@ import Network.HTTP.Req
   , responseBody
   , runReq
   )
+import Network.HTTP.Types.Header (ResponseHeaders)
 import qualified Network.SendGridV3.Api as SG
 import Network.SendGridV3.Api
   ( ApiKey(ApiKey)
@@ -393,14 +394,22 @@ fromEnvRequired var = do
     Just a -> return $ pack a
     Nothing -> error $ "Please set " <> var
 
+corsHeaders :: ResponseHeaders
+corsHeaders =
+  [ ("Access-Control-Allow-Origin", "*")
+  , ( "Access-Control-Allow-Headers"
+    , "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-requested-with")
+  , ("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+  ]
+
 responseOk :: APIGatewayProxyResponse body
-responseOk = APIGatewayProxyResponse 200 [] Nothing
+responseOk = APIGatewayProxyResponse 200 corsHeaders Nothing
 
 response :: Int -> APIGatewayProxyResponse Text
-response n = APIGatewayProxyResponse n [] Nothing
+response n = APIGatewayProxyResponse n corsHeaders Nothing
 
 responseMsg :: Int -> Text -> APIGatewayProxyResponse Text
-responseMsg n msg = APIGatewayProxyResponse n [] $ Just $ TextValue msg
+responseMsg n msg = APIGatewayProxyResponse n corsHeaders $ Just $ TextValue msg
 
 dbUrl :: IO BSI.ByteString
 dbUrl = do
