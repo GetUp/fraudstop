@@ -24,6 +24,7 @@ import Control.Monad.Trans.AWS
   )
 import Crypto.Hash (SHA256(SHA256), hashWith)
 import Data.Aeson (FromJSON, ToJSON, Value, (.=), decode, defaultOptions, encode, genericToEncoding, object, toEncoding)
+import Data.Aeson.TextValue (TextValue(TextValue))
 import qualified Data.ByteString.Internal as BSI
 import Data.ByteString.Lazy (fromStrict, toStrict)
 import qualified Data.ByteString.Lazy.Internal as BSLI
@@ -143,9 +144,12 @@ handler request = do
           [Only requestId] <- query conn insertDetails [encode details]
           let token = securer requestId
           status <- mailer $ verificationEmail addresser token details requestId
-          print status
-          pure responseOk
-        Nothing -> pure $ response 400
+          case status of
+            Left err -> do
+              print err
+              pure $ responseMsg 500 "Unable to send verification email"
+            Right _ -> pure responseOk
+        Nothing -> pure $ responseMsg 400 "Incorrect format"
     "/verify" -> do
       let maybeVerification = request ^. requestBody >>= verificationDecoder
       case maybeVerification of
@@ -394,6 +398,9 @@ responseOk = APIGatewayProxyResponse 200 [] Nothing
 
 response :: Int -> APIGatewayProxyResponse Text
 response n = APIGatewayProxyResponse n [] Nothing
+
+responseMsg :: Int -> Text -> APIGatewayProxyResponse Text
+responseMsg n msg = APIGatewayProxyResponse n [] $ Just $ TextValue msg
 
 dbUrl :: IO BSI.ByteString
 dbUrl = do
