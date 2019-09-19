@@ -190,14 +190,19 @@ handler request = do
                                        _ <- execute conn markEmail ("minister" :: Text, requestId')
                                        return ()
                                      Left err -> throw err)
-                            --  CM.when
-                            --    (emailMP details)
-                            --    (do mps <- query conn selectMPs [postcode details]
-                            --        CM.forM_ mps (\mp -> do
-                            --         res <- mailer $ mpEmail addresser details mp
-                            --         case res of
-                            --           Right _ -> execute conn markEmail mp.email [requestId'])
-                            --           Left err -> throw err))
+                             CM.when
+                               (emailMP details)
+                               (do mps <- query conn selectMPs [postcode details]
+                                   CM.forM_
+                                     mps
+                                     (\mp -> do
+                                        res <- mailer $ mpEmail addresser details mp
+                                        case res of
+                                          Right _ -> do
+                                            let (_, _, mpEmailAddress) = mp
+                                            _ <- execute conn markEmail (mpEmailAddress, requestId')
+                                            return ()
+                                          Left err -> throw err))
                              _ <- execute conn markAsProcessed [requestId']
                              pure responseOk
                            _ -> throw BadLetter)
