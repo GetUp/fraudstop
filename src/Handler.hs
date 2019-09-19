@@ -35,7 +35,7 @@ import Data.String (IsString)
 import Data.Text (Text, pack)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
-import Database.PostgreSQL.Simple (Only(Only), Query, connectPostgreSQL, query)
+import Database.PostgreSQL.Simple (Only(Only), Query, connectPostgreSQL, execute, query)
 import Database.PostgreSQL.Simple.FromField (FromField, fromField, fromJSONField)
 
 -- import Debug.Trace (trace)
@@ -184,6 +184,7 @@ handler request = do
                                (do mps <- query conn selectMPs [postcode details]
                                    mpStatuses <- CM.forM mps $ \mp -> mailer $ mpEmail addresser details mp
                                    mapM_ print mpStatuses)
+                             _ <- execute conn markAsProcessed [requestId']
                              pure responseOk
                            _ -> throw BadLetter)
                 else pure $ response 403
@@ -219,6 +220,9 @@ maybeAcquireDetails =
 
 selectMPs :: Query
 selectMPs = "select first_name, last_name, email from mps where ? = any(postcodes)"
+
+markAsProcessed :: Query
+markAsProcessed = "update user_requests set processed_at = now() where id = ?"
 
 verificationEmail :: (Text -> Text -> SG.Personalization) -> Text -> Details -> Int -> Mail () ()
 verificationEmail addresser token details requestId =
