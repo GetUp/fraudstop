@@ -159,9 +159,9 @@ handler request = do
       case maybeVerification of
         Just verification -> do
           let requestId' = requestId verification
-          [Only (maybeDetails :: Maybe Details)] <- query conn maybeAcquireDetails [requestId']
-          case maybeDetails of
-            Just details ->
+          detailsResult <- query conn maybeAcquireDetails [requestId']
+          case detailsResult of
+            [Only (Just details :: Maybe Details)] ->
               if securer requestId' == token verification
                 then (do rsp <- invokeLambda NorthVirginia lambdaName $ dbEncode details
                          let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
@@ -187,7 +187,7 @@ handler request = do
                              pure responseOk
                            _ -> throw BadLetter)
                 else pure $ response 403
-            Nothing -> pure $ response 403
+            _ -> pure $ response 403
         Nothing -> pure $ response 403
     _ -> pure $ response 404
 
