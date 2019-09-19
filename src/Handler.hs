@@ -167,8 +167,7 @@ handler request = do
                          let letter = decode (fromStrict rsp) :: Maybe LambdaResponse
                          case letter of
                            Just pdf -> do
-                             result <- sendLetter docsEmail docsKey stage (body pdf)
-                             print result
+                             _ <- sendLetter docsEmail docsKey stage (body pdf)
                              confirmationStatus <- mailer $ confirmationEmail addresser details (body pdf)
                              case confirmationStatus of
                                Right _ -> do
