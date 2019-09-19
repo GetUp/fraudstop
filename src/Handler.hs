@@ -132,7 +132,7 @@ handler request = do
   salt <- fromEnvOptional "SALT" "abcdefg"
   url <- dbUrl
   conn <- connectPostgreSQL url
-    -- print request
+  print request
   let securer = secureToken salt
   let mailer = mailSender sendGridApiKey stage
   let addresser = mailAddresser stage
