@@ -5,6 +5,7 @@ create table user_requests (
   , processed_at timestamp with time zone
   , process boolean
   , locked_at timestamp with time zone
+  , emails_sent text array
 );
 
 create table mps (

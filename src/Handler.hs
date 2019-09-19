@@ -170,20 +170,35 @@ handler request = do
                              result <- sendLetter docsEmail docsKey stage (body pdf)
                              print result
                              confirmationStatus <- mailer $ confirmationEmail addresser details (body pdf)
-                             print confirmationStatus
+                             case confirmationStatus of
+                               Right _ -> do
+                                 _ <- execute conn markEmail ("confirmation" :: Text, requestId')
+                                 return ()
+                               Left err -> throw err
                              CM.when
                                (submitFoi details)
                                (do foiStatus <- mailer $ foiEmail addresser details
-                                   print foiStatus)
+                                   case foiStatus of
+                                     Right _ -> do
+                                       _ <- execute conn markEmail ("foi" :: Text, requestId')
+                                       return ()
+                                     Left err -> throw err)
                              CM.when
                                (emailMinister details)
                                (do ministerStatus <- mailer $ ministerEmail addresser details
-                                   print ministerStatus)
-                             CM.when
-                               (emailMP details)
-                               (do mps <- query conn selectMPs [postcode details]
-                                   mpStatuses <- CM.forM mps $ \mp -> mailer $ mpEmail addresser details mp
-                                   mapM_ print mpStatuses)
+                                   case ministerStatus of
+                                     Right _ -> do
+                                       _ <- execute conn markEmail ("minister" :: Text, requestId')
+                                       return ()
+                                     Left err -> throw err)
+                            --  CM.when
+                            --    (emailMP details)
+                            --    (do mps <- query conn selectMPs [postcode details]
+                            --        CM.forM_ mps (\mp -> do
+                            --         res <- mailer $ mpEmail addresser details mp
+                            --         case res of
+                            --           Right _ -> execute conn markEmail mp.email [requestId'])
+                            --           Left err -> throw err))
                              _ <- execute conn markAsProcessed [requestId']
                              pure responseOk
                            _ -> throw BadLetter)
@@ -223,6 +238,9 @@ selectMPs = "select first_name, last_name, email from mps where ? = any(postcode
 
 markAsProcessed :: Query
 markAsProcessed = "update user_requests set processed_at = now() where id = ?"
+
+markEmail :: Query
+markEmail = "update user_requests set emails_sent = array_append(emails_sent, ?) where id = ?"
 
 verificationEmail :: (Text -> Text -> SG.Personalization) -> Text -> Details -> Int -> Mail () ()
 verificationEmail addresser token details requestId =
