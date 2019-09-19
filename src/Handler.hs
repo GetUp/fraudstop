@@ -142,15 +142,18 @@ handler request = do
       let maybeDetails = request ^. requestBody >>= detailDecoder
       case maybeDetails of
         Just details -> do
-          [Only requestId] <- query conn insertDetails [encode details]
-          let token = securer requestId
-          status <- mailer $ verificationEmail addresser token details requestId
-          case status of
-            Left err -> do
-              print err
-              pure $ responseMsg 500 "Unable to send verification email"
-            Right _ -> pure responseOk
-        Nothing -> pure $ responseMsg 400 "Incorrect format"
+          maybeRequestId <- query conn insertDetails [encode details]
+          case maybeRequestId of
+            [Only (Just requestId)] -> do
+              let token = securer requestId
+              status <- mailer $ verificationEmail addresser token details requestId
+              case status of
+                Left err -> do
+                  print err
+                  pure $ responseMsg 500 "Unable to send verification email"
+                Right _ -> pure responseOk
+            _ -> pure $ responseMsg 400 "Incorrect format"
+        _ -> pure $ responseMsg 400 "Incorrect format"
     "/verify" -> do
       let maybeVerification = request ^. requestBody >>= verificationDecoder
       case maybeVerification of
