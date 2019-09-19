@@ -37,9 +37,10 @@ main = do
             it "processes the request" $ do
               reqResponse <- handler $ Mock.request "/verify" [] body
               reqResponse `shouldBe` response 200
-              [Only requestId] <-
-                query_ conn "select id from user_requests where processed_at is not null" :: IO [Only Int]
-              requestId `shouldBe` 1
+              result <- query_ conn "select id from user_requests where processed_at is not null" :: IO [Only Int]
+              case result of
+                [Only requestId] -> requestId `shouldBe` 1
+                _ -> error "no result in database"
       describe "#secureToken" $ do
         let salt = "abcdefg"
         let requestId = 1
