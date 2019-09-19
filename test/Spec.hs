@@ -1,4 +1,3 @@
-import AWSLambda.Events.APIGateway (APIGatewayProxyResponse(APIGatewayProxyResponse))
 import qualified Data.ByteString.Internal as BSI
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -6,7 +5,7 @@ import Database.PostgreSQL.Simple (Connection, Only(Only), Query, connectPostgre
 import System.Environment (lookupEnv)
 import Test.Hspec (before_, context, describe, hspec, it, shouldBe)
 
-import Handler (handler, secureToken)
+import Handler (handler, response, secureToken)
 import qualified Mocks as Mock
 
 main :: IO ()
@@ -18,7 +17,7 @@ main = do
       describe "/begin" $
         it "persists the details and sends a verification email" $ do
           reqResponse <- handler $ Mock.request "/begin" [] details
-          reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
+          reqResponse `shouldBe` response 200
           [Only requestsCount] <-
             query_ conn "select count(id) from user_requests where details is not null" :: IO [Only Int]
           requestsCount `shouldBe` 1
@@ -32,12 +31,12 @@ main = do
             let body = invalidVerification
             it "refuses to do anything" $ do
               reqResponse <- handler $ Mock.request "/verify" [] body
-              reqResponse `shouldBe` APIGatewayProxyResponse 403 [] Nothing
+              reqResponse `shouldBe` response 403
           context "with a valid token" $ do
             let body = validVerification
             it "processes the request" $ do
               reqResponse <- handler $ Mock.request "/verify" [] body
-              reqResponse `shouldBe` APIGatewayProxyResponse 200 [] Nothing
+              reqResponse `shouldBe` response 200
               [Only requestId] <-
                 query_ conn "select id from user_requests where processed_at is not null" :: IO [Only Int]
               requestId `shouldBe` 1
