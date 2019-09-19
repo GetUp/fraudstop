@@ -220,11 +220,6 @@ mailAddresser stage email' name =
           else "tim+" <> replaceElemStrictText '@' '_' email' <> "@getup.org.au"
    in SG.personalization $ fromList [MailAddress to name]
 
--- validateToken :: Text -> Text -> Text -> Bool
--- validateToken salt email token =
---   let realToken =
---    in realToken == token
---   --  in trace (unpack salt) $ trace (unpack email) $ trace (unpack realToken) $ trace (unpack token) $ realToken == token
 insertDetails :: Query
 insertDetails = "insert into user_requests(created_at, details) values(now(), ?) returning id"
 
