@@ -9,7 +9,6 @@ import AWSLambda.Events.APIGateway
 import Control.Exception (Exception, throw)
 import Control.Lens ((<&>), (^.), set)
 import qualified Control.Monad as CM
-import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.AWS
   ( Credentials(Discover)
   , LogLevel(Debug)
@@ -51,6 +50,7 @@ import Network.HTTP.Req
   , jsonResponse
   , req
   , responseBody
+  , responseStatusCode
   , runReq
   )
 import Network.HTTP.Types.Header (ResponseHeaders)
@@ -355,7 +355,7 @@ invokeLambda region funcName payload = do
       Just output -> return output
       Nothing -> throw BadLambdaResponse
 
-sendLetter :: (MonadIO m, ToJSON v1, ToJSON v2, ToJSON v3) => v1 -> v2 -> Text -> v3 -> m Value
+sendLetter :: (ToJSON v1, ToJSON v2, ToJSON v3) => v1 -> v2 -> Text -> v3 -> IO Value
 sendLetter docsEmail docsKey stage letter =
   runReq defaultHttpConfig $ do
     let apiMode =
@@ -387,7 +387,9 @@ sendLetter docsEmail docsKey stage letter =
             , "Recipient" .= recipient
             ]
     r <- req POST endpoint (ReqBodyJson payload) jsonResponse mempty
-    return (responseBody r :: Value)
+    case responseStatusCode r :: Int of
+      200 -> return (responseBody r :: Value)
+      _ -> error "letter api request failed"
 
 fromEnvOptional :: String -> String -> IO Text
 fromEnvOptional var fallback = do
