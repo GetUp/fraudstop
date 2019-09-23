@@ -29,6 +29,7 @@ functions:
       SENDGRID_API_KEY: ${env:SENDGRID_API_KEY}
       DOCSAWAY_EMAIL: ${env:DOCSAWAY_EMAIL}
       DOCSAWAY_KEY: ${env:DOCSAWAY_KEY}
+      SALT: ${env:SALT}
 
   letter-func:
     runtime: nodejs10.x
