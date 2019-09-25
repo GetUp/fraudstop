@@ -222,7 +222,7 @@ mailAddresser stage email' name =
   let to =
         if stage == "PROD"
           then email'
-          else "tim+" <> replaceElemStrictText '@' '_' email' <> "@getup.org.au"
+          else "tech+" <> replaceElemStrictText '@' '_' email' <> "@getup.org.au"
    in SG.personalization $ fromList [MailAddress to name]
 
 insertDetails :: Query
