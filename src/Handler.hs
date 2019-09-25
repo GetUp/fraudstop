@@ -146,7 +146,7 @@ handler request = do
           case maybeRequestId of
             [Only (Just requestId)] -> do
               let token = securer requestId
-              status <- mailer $ verificationEmail addresser token details requestId
+              status <- mailer $ verificationEmail token details requestId
               case status of
                 Left err -> do
                   print err
@@ -241,9 +241,10 @@ markAsProcessed = "update user_requests set processed_at = now() where id = ?"
 markEmail :: Query
 markEmail = "update user_requests set emails_sent = array_append(emails_sent, ?) where id = ?"
 
-verificationEmail :: (Text -> Text -> SG.Personalization) -> Text -> Details -> Int -> Mail () ()
-verificationEmail addresser token details requestId =
-  let to = addresser (email details) (firstName details <> " " <> lastName details)
+verificationEmail :: Text -> Details -> Int -> Mail () ()
+verificationEmail token details requestId =
+  let name = firstName details <> " " <> lastName details
+      to = SG.personalization $ fromList [MailAddress (email details) name]
       from = MailAddress "info+fraudstop@getup.org.au" "GetUp"
       subject = "Please verify your email address"
       content = Just $ fromList [SG.mailContentHtml $ verificationEmailContent token details requestId]
