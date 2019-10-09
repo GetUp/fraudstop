@@ -3,8 +3,8 @@
   "private": true,
   "scripts": {
     "start": "STAGE='TEST' ghcid --command='stack ghci src/Handler.hs test/Spec.hs' --warnings --no-height-limit --clear --test=main",
-    "deploy": "set -u && SENDGRID_API_KEY=$SENDGRID_API_KEY DOCSAWAY_EMAIL=$DOCSAWAY_EMAIL DOCSAWAY_KEY=$DOCSAWAY_KEY DATABASE_URL=$FRAUDSTOP_DB_URL ./node_modules/.bin/sls deploy -f fraudstop-func",
-    "deployprod": "set -u && STAGE='prod' LETTER_LAMBDA='fraudstop-prod-letter-func' SALT=$FRAUDSTOP_PROD_SALT SENDGRID_API_KEY=$SENDGRID_API_KEY DOCSAWAY_EMAIL=$DOCSAWAY_EMAIL DOCSAWAY_KEY=$DOCSAWAY_KEY DATABASE_URL=$FRAUDSTOP_PROD_DB_URL ./node_modules/.bin/sls deploy -f fraudstop-func --stage prod"
+    "deploy": "set -u && STAGE='staging' HOST='https://staging.raise-newstart.com' SALT='abcdefg' SENDGRID_API_KEY=$SENDGRID_API_KEY DOCSAWAY_EMAIL=$DOCSAWAY_EMAIL DOCSAWAY_KEY=$DOCSAWAY_KEY DATABASE_URL=$FRAUDSTOP_DB_URL ./node_modules/.bin/sls deploy -f fraudstop-func",
+    "deployprod": "set -u && STAGE='prod' HOST='https://raise-newstart.com' LETTER_LAMBDA='fraudstop-prod-letter-func' SALT=$FRAUDSTOP_PROD_SALT SENDGRID_API_KEY=$SENDGRID_API_KEY DOCSAWAY_EMAIL=$DOCSAWAY_EMAIL DOCSAWAY_KEY=$DOCSAWAY_KEY DATABASE_URL=$FRAUDSTOP_PROD_DB_URL ./node_modules/.bin/sls deploy -f fraudstop-func --stage prod"
   },
   "dependencies": {
     "moment": "^2.24.0",

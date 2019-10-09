@@ -128,6 +128,7 @@ handler request = do
   docsEmail <- fromEnvRequired "DOCSAWAY_EMAIL"
   docsKey <- fromEnvRequired "DOCSAWAY_KEY"
   lambdaName <- fromEnvOptional "LETTER_LAMBDA" "fraudstop-dev-letter-func"
+  host <- fromEnvOptional "HOST" "http://localhost:3000"
   stage <- fromEnvOptional "STAGE" "DEV"
   salt <- fromEnvOptional "SALT" "abcdefg"
   url <- dbUrl
@@ -146,7 +147,7 @@ handler request = do
           case maybeRequestId of
             [Only (Just requestId)] -> do
               let token = securer requestId
-              status <- mailer $ verificationEmail token details requestId
+              status <- mailer $ verificationEmail host token details requestId
               case status of
                 Left err -> do
                   print err
@@ -241,19 +242,19 @@ markAsProcessed = "update user_requests set processed_at = now() where id = ?"
 markEmail :: Query
 markEmail = "update user_requests set emails_sent = array_append(emails_sent, ?) where id = ?"
 
-verificationEmail :: Text -> Details -> Int -> Mail () ()
-verificationEmail token details requestId =
+verificationEmail :: Text -> Text -> Details -> Int -> Mail () ()
+verificationEmail host token details requestId =
   let name = firstName details <> " " <> lastName details
       to = SG.personalization $ fromList [MailAddress (email details) name]
       from = MailAddress "info+fraudstop@getup.org.au" "GetUp"
       subject = "Please verify your email address"
-      content = Just $ fromList [SG.mailContentHtml $ verificationEmailContent token details requestId]
+      content = Just $ fromList [SG.mailContentHtml $ verificationEmailContent host token details requestId]
    in SG.mail [to] from subject content
 
-verificationEmailContent :: Text -> Details -> Int -> Text
-verificationEmailContent token d requestId =
+verificationEmailContent :: Text -> Text -> Details -> Int -> Text
+verificationEmailContent host token d requestId =
   let params = "?request_id=" <> tShow requestId <> "&secure_token=" <> token
-      link = "https://raise-newstart.com/fraudstop/verify" <> params
+      link = host <> "/fraudstop/verify" <> params
    in "Dear " <> firstName d <> ",<br><br>Your FraudStop appeal request has been received.<br><br><a href=\"" <> link <>
       "\">Please click here to verify your email address so that your request can be processed.</a><br><br>You will receive a confirmation email when processing is complete. If you do not receive a confirmation email within 24 hours, please call us on (02) 9211 4400.<br><br>You may also receive BCC copies of several other emails, if you chose those options.  These are for your reference only; you do not need to do anything further with them.<br><br>Thank you for using FraudStop."
 

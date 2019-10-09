@@ -31,6 +31,8 @@ functions:
       DOCSAWAY_EMAIL: ${env:DOCSAWAY_EMAIL}
       DOCSAWAY_KEY: ${env:DOCSAWAY_KEY}
       SALT: ${env:SALT}
+      STAGE: ${env:STAGE}
+      HOST: ${env:HOST}
 
   letter-func:
     runtime: nodejs10.x
